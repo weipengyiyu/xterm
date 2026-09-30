@@ -8,7 +8,7 @@ var I18N = {
   zh: {
     btn_new: '＋ 新建连接', btn_local: '⌨ 本地', btn_log: '📋 日志',
     btn_sftp: '📁 文件', btn_killall: '⏹ 全部关闭', btn_lang: '🌐 EN', btn_split: '⊞ 分屏',
-    btn_broadcast: '⇄ 同步输入',
+    btn_broadcast: '⇄ 同步输入', btn_pane_max: '⛶ 铺满',
     dl_title_new: '新建连接', dl_title_edit: '编辑会话',
     dl_conn: '连接', dl_save_conn: '保存并连接', dl_cancel: '取消',
     f_name: '会话名称', f_type: '类型', f_host: '主机', f_port: '端口',
@@ -39,7 +39,7 @@ var I18N = {
   en: {
     btn_new: '＋ New', btn_local: '⌨ Local', btn_log: '📋 Log',
     btn_sftp: '📁 Files', btn_killall: '⏹ Close All', btn_lang: '🌐 中文', btn_split: '⊞ Split',
-    btn_broadcast: '⇄ Broadcast',
+    btn_broadcast: '⇄ Broadcast', btn_pane_max: '⛶ Maximize',
     dl_title_new: 'New Connection', dl_title_edit: 'Edit Session',
     dl_conn: 'Connect', dl_save_conn: 'Save & Connect', dl_cancel: 'Cancel',
     f_name: 'Name', f_type: 'Type', f_host: 'Host', f_port: 'Port',
@@ -82,7 +82,9 @@ const DOM_TEXT_EN = {
   '📋 操作日志': '📋 Operation Log', '🌐 切换语言': '🌐 Language', '⏱ 定时发送': '⏱ Timed Send',
   '🔍 端口扫描': '🔍 Port Scan', '⇄ 导入 / 导出会话': '⇄ Import / Export Sessions',
   '⏺ 开始原始抓包': '⏺ Start Raw Capture', '⏺ 开始会话录制': '⏺ Start Recording',
-  '▶ 导入并回放录制': '▶ Import & Replay Recording', '⊞ 分屏': '⊞ Split',
+  '▶ 导入并回放录制': '▶ Import & Replay Recording', '⊞ 分屏': '⊞ Split', '⛶ 铺满': '⛶ Maximize',
+  '放到左侧': 'Drop left', '放到右侧': 'Drop right', '放到上方': 'Drop above', '放到下方': 'Drop below',
+  '完成': 'Done',
   '⇄ 同步输入': '⇄ Broadcast', '换行': 'Newline',
   '▣ 工作区': '▣ Workspace', '⚡ 命令': '⚡ Commands', '已保存会话': 'Saved Sessions',
   '默认': 'Default',
@@ -188,6 +190,9 @@ const DOM_ATTR_EN = {
   'SSH 文件浏览/下载 (SFTP)': 'Browse/Download Files (SFTP)', 'SSH 隧道管理': 'SSH Tunnel Management',
   '断开并关闭全部会话标签': 'Disconnect and Close All Tabs', '更多工具': 'More Tools',
   '分屏(每次增加一格，最多 2×2 / 4 格；单格用 ✕ 关闭)': 'Split (add pane up to 2×2 / 4; close with ✕)',
+  '临时铺满当前分屏，再按一次恢复': 'Temporarily maximize the focused pane; press again to restore',
+  '放到左侧': 'Drop left', '放到右侧': 'Drop right', '放到上方': 'Drop above', '放到下方': 'Drop below',
+  '完成': 'Done', '有新输出': 'New output', '输出已停': 'Output stopped',
   '把键盘输入同步到所有已连接的终端标签和分屏': 'Mirror keyboard input to every connected terminal tab and split pane',
   '保存或恢复当前标签与分屏布局': 'Save or Restore Tabs and Split Layout',
   '快捷命令(保存/执行/脚本)': 'Quick Commands', 'IP[:端口] 回车快速连接': 'IP[:port] — Enter to connect',
@@ -287,7 +292,7 @@ function applyI18n() {
   const map = {
     'btn-new': 'btn_new', 'btn-local': 'btn_local',
     'btn-sftp': 'btn_sftp', 'btn-killall': 'btn_killall', 'btn-split': 'btn_split',
-    'btn-broadcast': 'btn_broadcast',
+    'btn-pane-max': 'btn_pane_max', 'btn-broadcast': 'btn_broadcast',
     'side-title': 'side_title', 'btn-batch': 'side_batch', 'side-foot': 'side_foot',
   };
   const filterEl = document.getElementById('session-filter');

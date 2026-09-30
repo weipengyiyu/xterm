@@ -62,11 +62,14 @@ function createTerminal(host, tabOrPane) {
   term.loadAddon(fitAddon);
   const imageAddon = attachImageAddon(term, tabOrPane.cfg?.type);
   term.open(host);
+  attachGpuRenderer(term);
   bindTerminalExtras(term);
+  tabOrPane.term = term;
+  bindOscTitle(term, tabOrPane);
+  bindOutputFocus(tabOrPane._ownerTab || tabOrPane, tabOrPane);
   // Clipboard/key bindings need the concrete terminal object. Split panes
   // previously reached bindClipboard while pane.term was still null, aborting
   // creation before layout and connection setup completed.
-  tabOrPane.term = term;
   tabOrPane.fitAddon = fitAddon;
   tabOrPane.imageAddon = imageAddon;
   setTimeout(() => fitAddon.fit(), 0);
@@ -78,14 +81,16 @@ function createTerminal(host, tabOrPane) {
 
 function addPane(tab, dir = 'row', ratio = 0.5, opts = {}) {
   if (countPanes(tab) >= SPLIT_MAX) { setStatus(`最多支持 ${SPLIT_MAX} 个分屏`); return; }
+  if (tab._maximized) togglePaneMaximize(tab);
   const restoredId = Number(opts.id);
   const paneId = Number.isInteger(restoredId) && restoredId > 0 && restoredId <= 0xffff
     ? restoredId : tabSeq++;
   tabSeq = Math.max(tabSeq, paneId + 1);
   const host = createPaneHost('pane-split');
+  const ownCfg = opts.cfg && opts.cfg.type ? opts.cfg : null;
   const pane = {
     connId: paneId, term: null, fitAddon: null, imageAddon: null, host,
-    cfg: { ...tab.cfg }, state: 'connecting',
+    cfg: { ...(ownCfg || tab.cfg) }, state: 'connecting', _ownerTab: tab,
     hex: !!tab.hex, recParts: [], recLen: 0, logging: false, logBuf: ''
   };
   tab.extraPanes.push(pane);
@@ -107,7 +112,13 @@ function addPane(tab, dir = 'row', ratio = 0.5, opts = {}) {
   // The browser deliberately holds only a redacted session config after a
   // refresh. Ask the server to clone credentials from the authenticated main
   // connection instead of trying to reconnect with a missing password/key.
-  send({ type: 'connect', session: pane.cfg, id: paneId, sourceId: tab.id });
+  const sameAsParent = !ownCfg
+    || (ownCfg.type === tab.cfg.type
+      && String(ownCfg.host || '') === String(tab.cfg.host || '')
+      && String(ownCfg.port || '') === String(tab.cfg.port || '')
+      && String(ownCfg.shell || '') === String(tab.cfg.shell || '')
+      && String(ownCfg.name || '') === String(tab.cfg.name || ''));
+  send({ type: 'connect', session: pane.cfg, id: paneId, ...(sameAsParent ? { sourceId: tab.id } : {}) });
   setStatus('已分屏');
   applySplitLayout(tab, dir, ratio);
   scheduleTabsSave();
@@ -115,6 +126,7 @@ function addPane(tab, dir = 'row', ratio = 0.5, opts = {}) {
 }
 
 function removePane(tab, pane) {
+  if (tab._maximized === pane.host) togglePaneMaximize(tab);
   send({ type: 'disconnect', id: pane.connId });
   try { pane.term.dispose(); } catch {}
   pane.host.remove();
@@ -215,6 +227,141 @@ function applySplitLayout(tab, dir, ratio) {
   }, 50);
 }
 
+function focusedPaneHost(tab) {
+  const target = tab && tab._focusTarget;
+  if (target && target !== tab && target.host) return target.host;
+  return tab && tab.host ? tab.host.querySelector(':scope > .term-host.main-pane') : null;
+}
+
+function togglePaneMaximize(tab) {
+  if (!tab || tab.cfg?.type === 'vnc' || countPanes(tab) < 2) {
+    setStatus('先分屏后再铺满当前格');
+    return;
+  }
+  const host = focusedPaneHost(tab);
+  const turningOn = tab._maximized !== host;
+  tab._maximized = turningOn ? host : null;
+  tab.host.classList.toggle('pane-max', turningOn);
+  const nodes = [tab.host.querySelector(':scope > .term-host.main-pane'), ...(tab.extraPanes || []).map(p => p.host)];
+  nodes.forEach(el => { if (el) el.classList.toggle('pane-max-hidden', turningOn && el !== host); });
+  (tab._dividers || []).forEach(d => { d.style.visibility = turningOn ? 'hidden' : ''; });
+  if (!turningOn) applySplitLayout(tab, splitDirection(tab), splitRatio(tab));
+  const btn = $('btn-pane-max');
+  if (btn) btn.classList.toggle('on', !!turningOn && tab.id === activeTabId);
+  setTimeout(() => {
+    [tab, ...(tab.extraPanes || [])].forEach(x => { try { x.fitAddon?.fit(); } catch {} });
+  }, 30);
+  setStatus(turningOn ? '当前分屏已铺满' : '已恢复分屏');
+}
+
+function ensurePaneClose(host, onClose) {
+  let btn = host.querySelector(':scope > .pane-close');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.className = 'pane-close';
+    btn.type = 'button';
+    btn.textContent = '✕';
+    btn.title = '关闭此分屏';
+    host.appendChild(btn);
+  }
+  btn.onclick = (e) => { e.stopPropagation(); onClose(); };
+}
+
+function mergeTabInto(target, source, place) {
+  if (!target || !source || target === source) return;
+  if (target.cfg?.type === 'vnc' || source.cfg?.type === 'vnc') {
+    setStatus('VNC 会话不能并入分屏');
+    return;
+  }
+  if ((source.extraPanes || []).length) {
+    setStatus('请先关闭来源标签里的分屏，再拖进来');
+    return;
+  }
+  if (countPanes(target) >= SPLIT_MAX) {
+    setStatus(`最多支持 ${SPLIT_MAX} 个分屏`);
+    return;
+  }
+  const paneHost = source.host.querySelector(':scope > .term-host.main-pane');
+  if (!paneHost || !source.term) return;
+  if (target._maximized) togglePaneMaximize(target);
+  const info = source.host.querySelector(':scope > .hostinfo-bar');
+  if (info) paneHost.appendChild(info);
+  paneHost.classList.remove('main-pane');
+  paneHost.classList.add('pane-split');
+  if (source._splitCleanup) source._splitCleanup();
+  if (source._resizeObserver) {
+    try { source._resizeObserver.disconnect(); } catch {}
+    source._resizeObserver = null;
+  }
+  if (source.hostinfoTimer) { clearInterval(source.hostinfoTimer); source.hostinfoTimer = null; }
+  if (source.cpuTimer) { clearInterval(source.cpuTimer); source.cpuTimer = null; }
+  stopCpuAnim(source);
+  cancelReconnect(source);
+  source.host.remove();
+  const idx = tabs.indexOf(source);
+  if (idx >= 0) tabs.splice(idx, 1);
+  source.connId = source.id;
+  source.host = paneHost;
+  source._ownerTab = target;
+  source.extraPanes = [];
+  target.extraPanes.push(source);
+  const main = target.host.querySelector(':scope > .term-host.main-pane');
+  if ((place === 'left' || place === 'top') && main) target.host.insertBefore(paneHost, main);
+  else target.host.appendChild(paneHost);
+  ensurePaneClose(paneHost, () => removePane(target, source));
+  bindOutputFocus(target, source);
+  target._focusTarget = source;
+  bindClipboard(source);
+  const dir = (place === 'top' || place === 'bottom') ? 'col' : 'row';
+  const prefs = loadSplitPrefs();
+  saveSplitPrefs({ ...prefs, [target.id]: { ...(prefs[target.id] || {}), dir, ratio: 0.5 } });
+  applySplitLayout(target, dir, 0.5);
+  if (activeTabId === source.id) activeTabId = target.id;
+  activateTab(target.id);
+  try { source.term.focus(); } catch {}
+  scheduleTabsSave();
+  setStatus('已并入分屏');
+}
+
+function hideSplitDropOverlay() {
+  const overlay = document.getElementById('split-drop-overlay');
+  if (overlay) overlay.classList.add('hidden');
+}
+
+function ensureSplitDropOverlay() {
+  let overlay = document.getElementById('split-drop-overlay');
+  if (overlay) return overlay;
+  overlay = document.createElement('div');
+  overlay.id = 'split-drop-overlay';
+  overlay.className = 'hidden';
+  for (const [place, label] of [['left', '放到左侧'], ['right', '放到右侧'], ['top', '放到上方'], ['bottom', '放到下方']]) {
+    const zone = document.createElement('div');
+    zone.className = 'split-drop-zone';
+    zone.dataset.place = place;
+    zone.textContent = label;
+    overlay.appendChild(zone);
+  }
+  $('terms').appendChild(overlay);
+  overlay.addEventListener('dragover', (e) => {
+    if (!draggingTabId) return;
+    e.preventDefault();
+    const zone = e.target.closest('.split-drop-zone');
+    overlay.querySelectorAll('.split-drop-zone').forEach(z => z.classList.toggle('hot', z === zone));
+    e.dataTransfer.dropEffect = 'move';
+  });
+  overlay.addEventListener('drop', (e) => {
+    const zone = e.target.closest('.split-drop-zone');
+    if (!zone || !draggingTabId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const source = tabs.find(t => t.id === draggingTabId);
+    const target = tabs.find(t => t.id === activeTabId);
+    mergeTabInto(target, source, zone.dataset.place);
+    hideSplitDropOverlay();
+  });
+  return overlay;
+}
+
 function toggleSplit(tab) {
   if (!tab) return;
   const n = countPanes(tab);
@@ -233,6 +380,24 @@ $('btn-split').onclick = () => {
   if (tab.cfg.type === 'vnc') return setStatus('VNC 会话为独立桌面，不支持终端分屏');
   toggleSplit(tab);
 };
+$('btn-pane-max').onclick = () => {
+  const tab = tabs.find(t => t.id === activeTabId);
+  if (!tab) return setStatus('没有激活的会话');
+  togglePaneMaximize(tab);
+};
+document.addEventListener('dragover', (e) => {
+  if (!draggingTabId) return;
+  const terms = $('terms');
+  const target = tabs.find(t => t.id === activeTabId);
+  const overTerms = terms && (terms.contains(e.target) || e.target.id === 'split-drop-overlay');
+  if (!overTerms || !target || target.cfg?.type === 'vnc' || draggingTabId === activeTabId) {
+    hideSplitDropOverlay();
+    return;
+  }
+  const overlay = ensureSplitDropOverlay();
+  overlay.classList.remove('hidden');
+});
+document.addEventListener('dragend', () => hideSplitDropOverlay());
 
 function closePane(tab, pane) { removePane(tab, pane); }
 

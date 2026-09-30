@@ -54,6 +54,10 @@ function safeSendInput(id, data, encoding) {
 }
 function bindClipboard(tab) {
   const { term, host } = tab;
+  if (!term || !host || host._clipBound) return;
+  host._clipBound = true;
+  const keysBound = !!term._keyClipboardBound;
+  term._keyClipboardBound = true;
 
   // 1. 鼠标左键选中文本 → 自动复制
   // 点击风暴防护: ①clearTimeout 合并定时器 ②1 秒内点击超阈值进入防风暴模式, 完全停用复制
@@ -83,21 +87,16 @@ function bindClipboard(tab) {
     }, 300);
   });
 
-  // 2. 右键: 有选中文本 → 复制; 无选中 → 粘贴 (Xshell 习惯)
+  // 2. 右键粘贴。选中文本已在鼠标松开时复制。
   host.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     if (inStorm()) return;
     try { if (term.textarea) term.textarea.value = ''; } catch (err) { /* 忽略 */ }
-    if (term.getSelection()) {
-      copySelection(term);
-      term.clearSelection();
-    } else {
-      pasteClipboard(term);
-    }
+    pasteClipboard(term);
   });
 
-  // 3. 快捷键 (Ctrl/⌘ + C/V, Ctrl+Shift+C/V)
-  term.attachCustomKeyEventHandler((e) => {
+  // 3. 快捷键 (Ctrl/⌘ + C/V, Ctrl+Shift+C/V)。并入分屏时宿主变了，按键只绑一次。
+  if (!keysBound) term.attachCustomKeyEventHandler((e) => {
     if (e.type !== 'keydown') return true;
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key.toLowerCase();
@@ -108,8 +107,27 @@ function bindClipboard(tab) {
         return false;
       }
     }
+    if (e.ctrlKey && e.altKey && !e.shiftKey && e.key === 'Enter') {
+      const session = owningSessionTab(tab);
+      if (session && countPanes(session) > 1) {
+        togglePaneMaximize(session);
+        e.preventDefault();
+        return false;
+      }
+    }
     if (mod && !e.shiftKey && k === 'c') {
-      if (term.getSelection()) { copySelection(term); return false; }
+      const sel = term.getSelection();
+      if (sel) {
+        if (term._lastCtrlCSel !== sel) {
+          term._lastCtrlCSel = sel;
+          copySelection(term);
+          return false;
+        }
+        term._lastCtrlCSel = '';
+        try { term.clearSelection(); } catch (err) { /* 忽略 */ }
+      } else {
+        term._lastCtrlCSel = '';
+      }
       return true;
     }
     // Ctrl+V / Shift+Ctrl+V: 不拦截, 交给 xterm.js 原生粘贴 (可靠且不耦合剪贴板权限)

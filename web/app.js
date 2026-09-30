@@ -269,7 +269,7 @@ var I18N = {
   zh: {
     btn_new: '＋ 新建连接', btn_local: '⌨ 本地', btn_log: '📋 日志',
     btn_sftp: '📁 文件', btn_killall: '⏹ 全部关闭', btn_lang: '🌐 EN', btn_split: '⊞ 分屏',
-    btn_broadcast: '⇄ 同步输入',
+    btn_broadcast: '⇄ 同步输入', btn_pane_max: '⛶ 铺满',
     dl_title_new: '新建连接', dl_title_edit: '编辑会话',
     dl_conn: '连接', dl_save_conn: '保存并连接', dl_cancel: '取消',
     f_name: '会话名称', f_type: '类型', f_host: '主机', f_port: '端口',
@@ -300,7 +300,7 @@ var I18N = {
   en: {
     btn_new: '＋ New', btn_local: '⌨ Local', btn_log: '📋 Log',
     btn_sftp: '📁 Files', btn_killall: '⏹ Close All', btn_lang: '🌐 中文', btn_split: '⊞ Split',
-    btn_broadcast: '⇄ Broadcast',
+    btn_broadcast: '⇄ Broadcast', btn_pane_max: '⛶ Maximize',
     dl_title_new: 'New Connection', dl_title_edit: 'Edit Session',
     dl_conn: 'Connect', dl_save_conn: 'Save & Connect', dl_cancel: 'Cancel',
     f_name: 'Name', f_type: 'Type', f_host: 'Host', f_port: 'Port',
@@ -343,7 +343,9 @@ const DOM_TEXT_EN = {
   '📋 操作日志': '📋 Operation Log', '🌐 切换语言': '🌐 Language', '⏱ 定时发送': '⏱ Timed Send',
   '🔍 端口扫描': '🔍 Port Scan', '⇄ 导入 / 导出会话': '⇄ Import / Export Sessions',
   '⏺ 开始原始抓包': '⏺ Start Raw Capture', '⏺ 开始会话录制': '⏺ Start Recording',
-  '▶ 导入并回放录制': '▶ Import & Replay Recording', '⊞ 分屏': '⊞ Split',
+  '▶ 导入并回放录制': '▶ Import & Replay Recording', '⊞ 分屏': '⊞ Split', '⛶ 铺满': '⛶ Maximize',
+  '放到左侧': 'Drop left', '放到右侧': 'Drop right', '放到上方': 'Drop above', '放到下方': 'Drop below',
+  '完成': 'Done',
   '⇄ 同步输入': '⇄ Broadcast', '换行': 'Newline',
   '▣ 工作区': '▣ Workspace', '⚡ 命令': '⚡ Commands', '已保存会话': 'Saved Sessions',
   '默认': 'Default',
@@ -449,6 +451,9 @@ const DOM_ATTR_EN = {
   'SSH 文件浏览/下载 (SFTP)': 'Browse/Download Files (SFTP)', 'SSH 隧道管理': 'SSH Tunnel Management',
   '断开并关闭全部会话标签': 'Disconnect and Close All Tabs', '更多工具': 'More Tools',
   '分屏(每次增加一格，最多 2×2 / 4 格；单格用 ✕ 关闭)': 'Split (add pane up to 2×2 / 4; close with ✕)',
+  '临时铺满当前分屏，再按一次恢复': 'Temporarily maximize the focused pane; press again to restore',
+  '放到左侧': 'Drop left', '放到右侧': 'Drop right', '放到上方': 'Drop above', '放到下方': 'Drop below',
+  '完成': 'Done', '有新输出': 'New output', '输出已停': 'Output stopped',
   '把键盘输入同步到所有已连接的终端标签和分屏': 'Mirror keyboard input to every connected terminal tab and split pane',
   '保存或恢复当前标签与分屏布局': 'Save or Restore Tabs and Split Layout',
   '快捷命令(保存/执行/脚本)': 'Quick Commands', 'IP[:端口] 回车快速连接': 'IP[:port] — Enter to connect',
@@ -548,7 +553,7 @@ function applyI18n() {
   const map = {
     'btn-new': 'btn_new', 'btn-local': 'btn_local',
     'btn-sftp': 'btn_sftp', 'btn-killall': 'btn_killall', 'btn-split': 'btn_split',
-    'btn-broadcast': 'btn_broadcast',
+    'btn-pane-max': 'btn_pane_max', 'btn-broadcast': 'btn_broadcast',
     'side-title': 'side_title', 'btn-batch': 'side_batch', 'side-foot': 'side_foot',
   };
   const filterEl = document.getElementById('session-filter');
@@ -846,6 +851,10 @@ function safeSendInput(id, data, encoding) {
 }
 function bindClipboard(tab) {
   const { term, host } = tab;
+  if (!term || !host || host._clipBound) return;
+  host._clipBound = true;
+  const keysBound = !!term._keyClipboardBound;
+  term._keyClipboardBound = true;
 
   // 1. 鼠标左键选中文本 → 自动复制
   // 点击风暴防护: ①clearTimeout 合并定时器 ②1 秒内点击超阈值进入防风暴模式, 完全停用复制
@@ -875,21 +884,16 @@ function bindClipboard(tab) {
     }, 300);
   });
 
-  // 2. 右键: 有选中文本 → 复制; 无选中 → 粘贴 (Xshell 习惯)
+  // 2. 右键粘贴。选中文本已在鼠标松开时复制。
   host.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     if (inStorm()) return;
     try { if (term.textarea) term.textarea.value = ''; } catch (err) { /* 忽略 */ }
-    if (term.getSelection()) {
-      copySelection(term);
-      term.clearSelection();
-    } else {
-      pasteClipboard(term);
-    }
+    pasteClipboard(term);
   });
 
-  // 3. 快捷键 (Ctrl/⌘ + C/V, Ctrl+Shift+C/V)
-  term.attachCustomKeyEventHandler((e) => {
+  // 3. 快捷键 (Ctrl/⌘ + C/V, Ctrl+Shift+C/V)。并入分屏时宿主变了，按键只绑一次。
+  if (!keysBound) term.attachCustomKeyEventHandler((e) => {
     if (e.type !== 'keydown') return true;
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key.toLowerCase();
@@ -900,8 +904,27 @@ function bindClipboard(tab) {
         return false;
       }
     }
+    if (e.ctrlKey && e.altKey && !e.shiftKey && e.key === 'Enter') {
+      const session = owningSessionTab(tab);
+      if (session && countPanes(session) > 1) {
+        togglePaneMaximize(session);
+        e.preventDefault();
+        return false;
+      }
+    }
     if (mod && !e.shiftKey && k === 'c') {
-      if (term.getSelection()) { copySelection(term); return false; }
+      const sel = term.getSelection();
+      if (sel) {
+        if (term._lastCtrlCSel !== sel) {
+          term._lastCtrlCSel = sel;
+          copySelection(term);
+          return false;
+        }
+        term._lastCtrlCSel = '';
+        try { term.clearSelection(); } catch (err) { /* 忽略 */ }
+      } else {
+        term._lastCtrlCSel = '';
+      }
       return true;
     }
     // Ctrl+V / Shift+Ctrl+V: 不拦截, 交给 xterm.js 原生粘贴 (可靠且不耦合剪贴板权限)
@@ -2810,11 +2833,14 @@ function createTerminal(host, tabOrPane) {
   term.loadAddon(fitAddon);
   const imageAddon = attachImageAddon(term, tabOrPane.cfg?.type);
   term.open(host);
+  attachGpuRenderer(term);
   bindTerminalExtras(term);
+  tabOrPane.term = term;
+  bindOscTitle(term, tabOrPane);
+  bindOutputFocus(tabOrPane._ownerTab || tabOrPane, tabOrPane);
   // Clipboard/key bindings need the concrete terminal object. Split panes
   // previously reached bindClipboard while pane.term was still null, aborting
   // creation before layout and connection setup completed.
-  tabOrPane.term = term;
   tabOrPane.fitAddon = fitAddon;
   tabOrPane.imageAddon = imageAddon;
   setTimeout(() => fitAddon.fit(), 0);
@@ -2826,14 +2852,16 @@ function createTerminal(host, tabOrPane) {
 
 function addPane(tab, dir = 'row', ratio = 0.5, opts = {}) {
   if (countPanes(tab) >= SPLIT_MAX) { setStatus(`最多支持 ${SPLIT_MAX} 个分屏`); return; }
+  if (tab._maximized) togglePaneMaximize(tab);
   const restoredId = Number(opts.id);
   const paneId = Number.isInteger(restoredId) && restoredId > 0 && restoredId <= 0xffff
     ? restoredId : tabSeq++;
   tabSeq = Math.max(tabSeq, paneId + 1);
   const host = createPaneHost('pane-split');
+  const ownCfg = opts.cfg && opts.cfg.type ? opts.cfg : null;
   const pane = {
     connId: paneId, term: null, fitAddon: null, imageAddon: null, host,
-    cfg: { ...tab.cfg }, state: 'connecting',
+    cfg: { ...(ownCfg || tab.cfg) }, state: 'connecting', _ownerTab: tab,
     hex: !!tab.hex, recParts: [], recLen: 0, logging: false, logBuf: ''
   };
   tab.extraPanes.push(pane);
@@ -2855,7 +2883,13 @@ function addPane(tab, dir = 'row', ratio = 0.5, opts = {}) {
   // The browser deliberately holds only a redacted session config after a
   // refresh. Ask the server to clone credentials from the authenticated main
   // connection instead of trying to reconnect with a missing password/key.
-  send({ type: 'connect', session: pane.cfg, id: paneId, sourceId: tab.id });
+  const sameAsParent = !ownCfg
+    || (ownCfg.type === tab.cfg.type
+      && String(ownCfg.host || '') === String(tab.cfg.host || '')
+      && String(ownCfg.port || '') === String(tab.cfg.port || '')
+      && String(ownCfg.shell || '') === String(tab.cfg.shell || '')
+      && String(ownCfg.name || '') === String(tab.cfg.name || ''));
+  send({ type: 'connect', session: pane.cfg, id: paneId, ...(sameAsParent ? { sourceId: tab.id } : {}) });
   setStatus('已分屏');
   applySplitLayout(tab, dir, ratio);
   scheduleTabsSave();
@@ -2863,6 +2897,7 @@ function addPane(tab, dir = 'row', ratio = 0.5, opts = {}) {
 }
 
 function removePane(tab, pane) {
+  if (tab._maximized === pane.host) togglePaneMaximize(tab);
   send({ type: 'disconnect', id: pane.connId });
   try { pane.term.dispose(); } catch {}
   pane.host.remove();
@@ -2963,6 +2998,141 @@ function applySplitLayout(tab, dir, ratio) {
   }, 50);
 }
 
+function focusedPaneHost(tab) {
+  const target = tab && tab._focusTarget;
+  if (target && target !== tab && target.host) return target.host;
+  return tab && tab.host ? tab.host.querySelector(':scope > .term-host.main-pane') : null;
+}
+
+function togglePaneMaximize(tab) {
+  if (!tab || tab.cfg?.type === 'vnc' || countPanes(tab) < 2) {
+    setStatus('先分屏后再铺满当前格');
+    return;
+  }
+  const host = focusedPaneHost(tab);
+  const turningOn = tab._maximized !== host;
+  tab._maximized = turningOn ? host : null;
+  tab.host.classList.toggle('pane-max', turningOn);
+  const nodes = [tab.host.querySelector(':scope > .term-host.main-pane'), ...(tab.extraPanes || []).map(p => p.host)];
+  nodes.forEach(el => { if (el) el.classList.toggle('pane-max-hidden', turningOn && el !== host); });
+  (tab._dividers || []).forEach(d => { d.style.visibility = turningOn ? 'hidden' : ''; });
+  if (!turningOn) applySplitLayout(tab, splitDirection(tab), splitRatio(tab));
+  const btn = $('btn-pane-max');
+  if (btn) btn.classList.toggle('on', !!turningOn && tab.id === activeTabId);
+  setTimeout(() => {
+    [tab, ...(tab.extraPanes || [])].forEach(x => { try { x.fitAddon?.fit(); } catch {} });
+  }, 30);
+  setStatus(turningOn ? '当前分屏已铺满' : '已恢复分屏');
+}
+
+function ensurePaneClose(host, onClose) {
+  let btn = host.querySelector(':scope > .pane-close');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.className = 'pane-close';
+    btn.type = 'button';
+    btn.textContent = '✕';
+    btn.title = '关闭此分屏';
+    host.appendChild(btn);
+  }
+  btn.onclick = (e) => { e.stopPropagation(); onClose(); };
+}
+
+function mergeTabInto(target, source, place) {
+  if (!target || !source || target === source) return;
+  if (target.cfg?.type === 'vnc' || source.cfg?.type === 'vnc') {
+    setStatus('VNC 会话不能并入分屏');
+    return;
+  }
+  if ((source.extraPanes || []).length) {
+    setStatus('请先关闭来源标签里的分屏，再拖进来');
+    return;
+  }
+  if (countPanes(target) >= SPLIT_MAX) {
+    setStatus(`最多支持 ${SPLIT_MAX} 个分屏`);
+    return;
+  }
+  const paneHost = source.host.querySelector(':scope > .term-host.main-pane');
+  if (!paneHost || !source.term) return;
+  if (target._maximized) togglePaneMaximize(target);
+  const info = source.host.querySelector(':scope > .hostinfo-bar');
+  if (info) paneHost.appendChild(info);
+  paneHost.classList.remove('main-pane');
+  paneHost.classList.add('pane-split');
+  if (source._splitCleanup) source._splitCleanup();
+  if (source._resizeObserver) {
+    try { source._resizeObserver.disconnect(); } catch {}
+    source._resizeObserver = null;
+  }
+  if (source.hostinfoTimer) { clearInterval(source.hostinfoTimer); source.hostinfoTimer = null; }
+  if (source.cpuTimer) { clearInterval(source.cpuTimer); source.cpuTimer = null; }
+  stopCpuAnim(source);
+  cancelReconnect(source);
+  source.host.remove();
+  const idx = tabs.indexOf(source);
+  if (idx >= 0) tabs.splice(idx, 1);
+  source.connId = source.id;
+  source.host = paneHost;
+  source._ownerTab = target;
+  source.extraPanes = [];
+  target.extraPanes.push(source);
+  const main = target.host.querySelector(':scope > .term-host.main-pane');
+  if ((place === 'left' || place === 'top') && main) target.host.insertBefore(paneHost, main);
+  else target.host.appendChild(paneHost);
+  ensurePaneClose(paneHost, () => removePane(target, source));
+  bindOutputFocus(target, source);
+  target._focusTarget = source;
+  bindClipboard(source);
+  const dir = (place === 'top' || place === 'bottom') ? 'col' : 'row';
+  const prefs = loadSplitPrefs();
+  saveSplitPrefs({ ...prefs, [target.id]: { ...(prefs[target.id] || {}), dir, ratio: 0.5 } });
+  applySplitLayout(target, dir, 0.5);
+  if (activeTabId === source.id) activeTabId = target.id;
+  activateTab(target.id);
+  try { source.term.focus(); } catch {}
+  scheduleTabsSave();
+  setStatus('已并入分屏');
+}
+
+function hideSplitDropOverlay() {
+  const overlay = document.getElementById('split-drop-overlay');
+  if (overlay) overlay.classList.add('hidden');
+}
+
+function ensureSplitDropOverlay() {
+  let overlay = document.getElementById('split-drop-overlay');
+  if (overlay) return overlay;
+  overlay = document.createElement('div');
+  overlay.id = 'split-drop-overlay';
+  overlay.className = 'hidden';
+  for (const [place, label] of [['left', '放到左侧'], ['right', '放到右侧'], ['top', '放到上方'], ['bottom', '放到下方']]) {
+    const zone = document.createElement('div');
+    zone.className = 'split-drop-zone';
+    zone.dataset.place = place;
+    zone.textContent = label;
+    overlay.appendChild(zone);
+  }
+  $('terms').appendChild(overlay);
+  overlay.addEventListener('dragover', (e) => {
+    if (!draggingTabId) return;
+    e.preventDefault();
+    const zone = e.target.closest('.split-drop-zone');
+    overlay.querySelectorAll('.split-drop-zone').forEach(z => z.classList.toggle('hot', z === zone));
+    e.dataTransfer.dropEffect = 'move';
+  });
+  overlay.addEventListener('drop', (e) => {
+    const zone = e.target.closest('.split-drop-zone');
+    if (!zone || !draggingTabId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const source = tabs.find(t => t.id === draggingTabId);
+    const target = tabs.find(t => t.id === activeTabId);
+    mergeTabInto(target, source, zone.dataset.place);
+    hideSplitDropOverlay();
+  });
+  return overlay;
+}
+
 function toggleSplit(tab) {
   if (!tab) return;
   const n = countPanes(tab);
@@ -2981,6 +3151,24 @@ $('btn-split').onclick = () => {
   if (tab.cfg.type === 'vnc') return setStatus('VNC 会话为独立桌面，不支持终端分屏');
   toggleSplit(tab);
 };
+$('btn-pane-max').onclick = () => {
+  const tab = tabs.find(t => t.id === activeTabId);
+  if (!tab) return setStatus('没有激活的会话');
+  togglePaneMaximize(tab);
+};
+document.addEventListener('dragover', (e) => {
+  if (!draggingTabId) return;
+  const terms = $('terms');
+  const target = tabs.find(t => t.id === activeTabId);
+  const overTerms = terms && (terms.contains(e.target) || e.target.id === 'split-drop-overlay');
+  if (!overTerms || !target || target.cfg?.type === 'vnc' || draggingTabId === activeTabId) {
+    hideSplitDropOverlay();
+    return;
+  }
+  const overlay = ensureSplitDropOverlay();
+  overlay.classList.remove('hidden');
+});
+document.addEventListener('dragend', () => hideSplitDropOverlay());
 
 function closePane(tab, pane) { removePane(tab, pane); }
 
@@ -3474,57 +3662,255 @@ function onWsMessage(ev) {
 }
 connectWebSocket();
 
+const DRAW_HOLD_BYTES = 256 * 1024;
+const DRAW_CAP_BYTES = 512 * 1024;
+let outputHoldSent = false;
+
+function addonCtor(globalName, exportName) {
+  const value = window[globalName];
+  if (typeof value === 'function') return value;
+  if (value && typeof value[exportName] === 'function') return value[exportName];
+  return null;
+}
+function attachCanvasRenderer(term) {
+  const Ctor = addonCtor('CanvasAddon', 'CanvasAddon');
+  if (!Ctor || !term || term._canvasRenderer) return;
+  try {
+    const addon = new Ctor();
+    term.loadAddon(addon);
+    term._canvasRenderer = addon;
+  } catch (e) { /* DOM 渲染仍可用 */ }
+}
+function attachGpuRenderer(term) {
+  if (!term || term._gpuRenderer) return;
+  const Ctor = addonCtor('WebglAddon', 'WebglAddon');
+  if (!Ctor) { attachCanvasRenderer(term); return; }
+  try {
+    const addon = new Ctor();
+    term.loadAddon(addon);
+    term._gpuRenderer = addon;
+    if (typeof addon.onContextLoss === 'function') {
+      addon.onContextLoss(() => {
+        try { addon.dispose(); } catch {}
+        term._gpuRenderer = null;
+        attachCanvasRenderer(term);
+      });
+    }
+  } catch (e) {
+    attachCanvasRenderer(term);
+  }
+}
+function bindOutputFocus(ownerTab, target) {
+  const el = target && target.term && target.term.textarea;
+  if (!ownerTab || !el) return;
+  if (el._outputFocusHandler) el.removeEventListener('focus', el._outputFocusHandler);
+  el._outputFocusHandler = () => {
+    ownerTab._focusTarget = target;
+    flushTerminalDraw(target);
+  };
+  el.addEventListener('focus', el._outputFocusHandler);
+}
+function bindOscTitle(term, target) {
+  if (!term || target == null || typeof term.onTitleChange !== 'function' || term._oscTitleBound) return;
+  term._oscTitleBound = true;
+  term.onTitleChange((title) => {
+    target.oscTitle = String(title || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 80);
+    scheduleTabbarRender();
+  });
+}
+function tabLabel(tab) {
+  const focused = tab._focusTarget;
+  const osc = focused && focused !== tab && focused.oscTitle ? focused.oscTitle : (tab.oscTitle || '');
+  if (osc) return osc;
+  return tab.cfg.name || ((TYPE_ICON[tab.cfg.type] || '') + ' ' + (tab.cfg.host || tab.cfg.port || ''));
+}
+let tabbarRaf = 0;
+function scheduleTabbarRender() {
+  if (tabbarRaf) return;
+  tabbarRaf = requestAnimationFrame(() => {
+    tabbarRaf = 0;
+    renderTabbar();
+  });
+}
+function clearTabActivity(tab) {
+  if (!tab || !tab.activity) {
+    if (tab && tab._activityTimer) { clearTimeout(tab._activityTimer); tab._activityTimer = null; }
+    return;
+  }
+  tab.activity = '';
+  if (tab._activityTimer) { clearTimeout(tab._activityTimer); tab._activityTimer = null; }
+}
+function noteTabActivity(tab) {
+  if (!tab || tab.id === activeTabId) return;
+  const was = tab.activity;
+  tab.activity = 'live';
+  if (tab._activityTimer) clearTimeout(tab._activityTimer);
+  tab._activityTimer = setTimeout(() => {
+    tab._activityTimer = null;
+    if (tab.activity !== 'live' || tab.id === activeTabId) return;
+    tab.activity = 'done';
+    scheduleTabbarRender();
+  }, 1500);
+  if (was !== 'live') scheduleTabbarRender();
+}
+function isDrawTarget(target) {
+  const tab = (target && target._ownerTab) || target;
+  if (!tab || typeof activeTabId === 'undefined' || tab.id !== activeTabId) return false;
+  return (tab._focusTarget || tab) === target;
+}
+function signalOutputHold(hold) {
+  if (outputHoldSent === hold) return;
+  outputHoldSent = hold;
+  send({ type: hold ? 'output-hold' : 'output-release' });
+}
+function pendingDrawBytes() {
+  let total = 0;
+  for (const tab of tabs) {
+    if (isDrawTarget(tab) || tab._writing) total += tab._pendingBytes || 0;
+    for (const pane of tab.extraPanes || []) {
+      if (isDrawTarget(pane) || pane._writing) total += pane._pendingBytes || 0;
+    }
+  }
+  return total;
+}
+function anyTerminalWriting() {
+  for (const tab of tabs) {
+    if (tab._writing) return true;
+    for (const pane of tab.extraPanes || []) if (pane._writing) return true;
+  }
+  return false;
+}
+function pushDrawText(target, text) {
+  if (!text) return;
+  if (!target._pending) target._pending = [];
+  target._pending.push(text);
+  target._pendingBytes = (target._pendingBytes || 0) + text.length;
+  while (target._pendingBytes > DRAW_CAP_BYTES && target._pending.length > 1) {
+    target._pendingBytes -= target._pending.shift().length;
+  }
+}
+function flushTerminalDraw(target) {
+  if (!target || !target.term || target._writing) return;
+  if (!target._pending || !target._pending.length || !isDrawTarget(target)) return;
+  const parts = target._pending;
+  target._pending = [];
+  const pendingBytes = target._pendingBytes || 0;
+  target._pendingBytes = 0;
+  let text = parts.join('');
+  const tab = target._ownerTab || target;
+  if (!target._ownerTab && tab.cfg && tab.cfg.type === 'serial' && tab.cfg.timestamp) {
+    text = `[${new Date().toLocaleTimeString()}] ` + text;
+  }
+  if (!target._ownerTab && tab.cfg && tab.cfg.type === 'serial' && tab.cfg.trigger && text.includes(tab.cfg.trigger)) {
+    setStatus(`串口触发：${tab.cfg.trigger}`);
+  }
+  target._writing = true;
+  let finished = false;
+  const done = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(target._writeTimer);
+    target._writing = false;
+    signalOutputHold(pendingDrawBytes() > DRAW_HOLD_BYTES || anyTerminalWriting());
+    if (target._pending && target._pending.length) scheduleTerminalDraw(target);
+  };
+  target._writeTimer = setTimeout(done, 2000);
+  try { target.term.write(text, done); }
+  catch (e) {
+    try { target.term.write(text); } catch {}
+    done();
+  }
+  if (target._writing && (pendingBytes > DRAW_HOLD_BYTES || pendingDrawBytes() > DRAW_HOLD_BYTES)) signalOutputHold(true);
+}
+function scheduleTerminalDraw(target) {
+  if (!target || target._drawRaf || target._writing) return;
+  target._drawRaf = requestAnimationFrame(() => {
+    target._drawRaf = 0;
+    flushTerminalDraw(target);
+  });
+}
+function queueReplay(target, text) {
+  if (!text) return;
+  if (!target._replayQueue) target._replayQueue = [];
+  target._replayQueue.push(text);
+  scheduleTabsSave();
+}
+function commitReplay(target) {
+  const queued = target && target._replayQueue;
+  if (!queued || !queued.length) return;
+  target._replayQueue = [];
+  const text = queued.join('');
+  if (!target.recParts) target.recParts = [];
+  target.recLen = (target.recLen || 0) + text.length;
+  target.recParts.push(text);
+  while (typeof BUF_MAX === 'number' && target.recLen > BUF_MAX && target.recParts.length) {
+    target.recLen -= target.recParts.shift().length;
+  }
+}
+function commitAllReplay() {
+  if (typeof tabs === 'undefined') return;
+  for (const tab of tabs) {
+    commitReplay(tab);
+    for (const pane of tab.extraPanes || []) commitReplay(pane);
+  }
+}
+
 function processTerminalOutput(tab, pane, payload) {
-  const term = pane ? pane.term : tab.term;
-  const displayTarget = pane || tab;
-  if (!displayTarget._streamDecoder) {
-    displayTarget._streamDecoder = new (Enc().StreamingDecoder)(tab.cfg.encoding || 'utf-8');
+  const target = pane || tab;
+  if (pane) pane._ownerTab = tab;
+  if (!target._streamDecoder) {
+    target._streamDecoder = new (Enc().StreamingDecoder)(tab.cfg.encoding || 'utf-8');
   }
-  const stamp = !pane && tab.cfg.type === 'serial' && tab.cfg.timestamp ? `[${new Date().toLocaleTimeString()}] ` : '';
-  if ((pane ? pane.hex : tab.hex)) term.write(stamp + hexOf(payload) + ' ');
-  else {
-    const text = Enc().decodeBuffer(payload, tab.cfg.encoding || 'utf-8');
-    if (stamp) term.write(stamp);
-    term.write(text);
-  }
-  if (!pane && tab.cfg.type === 'serial' && tab.cfg.trigger) {
-    try {
-      const trigText = Enc().decodeBuffer(payload, tab.cfg.encoding || 'utf-8');
-      if (trigText.includes(tab.cfg.trigger)) setStatus(`串口触发：${tab.cfg.trigger}`);
-    } catch {}
+  let text = '';
+  try {
+    text = (pane ? pane.hex : tab.hex) ? hexOf(payload) + ' ' : target._streamDecoder.decode(payload);
+  } catch (e) { return; }
+  if (!text) return;
+  if (!pane && tab.recording) {
+    if (!tab._recordPending) tab._recordPending = [];
+    tab._recordPending.push(text);
+    if (!tab._recordTimer) {
+      tab._recordTimer = setTimeout(() => {
+        tab._recordTimer = null;
+        const chunk = (tab._recordPending || []).join('');
+        tab._recordPending = [];
+        if (!chunk || !tab.recording) return;
+        tab.recording.events.push({ at: Date.now() - tab.recording.startedAt, text: chunk });
+        tab.recording.size += chunk.length;
+        if (tab.recording.events.length > 100000 || tab.recording.size > 8 * 1024 * 1024) {
+          tab.recording.stopped = '录制达到 8 MB / 100,000 条上限';
+          stopSessionRecording(tab);
+        }
+      }, 200);
+    }
   }
   if (tab.logging) {
-    const dir = pane || tab;
-    if (!dir.captureParts) dir.captureParts = [];
-    if (!dir.captureSize) dir.captureSize = 0;
-    const line = `${new Date().toISOString()} RX ${hexdumpLine(payload)}\n`;
-    dir.captureParts.push(line);
-    dir.captureSize += line.length;
-    while (dir.captureSize > CAPTURE_MAX && dir.captureParts.length) {
-      const dropped = dir.captureParts.shift();
-      dir.captureSize -= dropped.length;
+    const dir = target;
+    if (!dir._capturePending) dir._capturePending = [];
+    dir._capturePending.push(payload);
+    if (!dir._captureTimer) {
+      dir._captureTimer = setTimeout(() => {
+        dir._captureTimer = null;
+        const chunks = dir._capturePending || [];
+        dir._capturePending = [];
+        if (!dir.captureParts) dir.captureParts = [];
+        if (!dir.captureSize) dir.captureSize = 0;
+        for (const chunk of chunks) {
+          const line = `${new Date().toISOString()} RX ${hexdumpLine(chunk)}\n`;
+          dir.captureParts.push(line);
+          dir.captureSize += line.length;
+        }
+        while (dir.captureSize > CAPTURE_MAX && dir.captureParts.length) {
+          dir.captureSize -= dir.captureParts.shift().length;
+        }
+      }, 200);
     }
   }
-  try {
-    const text = displayTarget._streamDecoder.decode(payload);
-    if (!pane && tab.recording) {
-      tab.recording.events.push({ at: Date.now() - tab.recording.startedAt, text });
-      tab.recording.size += text.length;
-      if (tab.recording.events.length > 100000 || tab.recording.size > 8 * 1024 * 1024) {
-        tab.recording.stopped = '录制达到 8 MB / 100,000 条上限';
-        stopSessionRecording(tab);
-      }
-    }
-    const target = pane || tab;
-    if (!target.recParts) target.recParts = [];
-    target.recLen = (target.recLen || 0) + text.length;
-    target.recParts.push(text);
-    target._outputSeq = (target._outputSeq || 0) + 1;
-    while (target.recLen > BUF_MAX && target.recParts.length) {
-      target.recLen -= target.recParts.shift().length;
-    }
-    scheduleTabsSave();
-  } catch (e) { /* 忽略 */ }
+  queueReplay(target, text);
+  pushDrawText(target, text);
+  if (isDrawTarget(target)) scheduleTerminalDraw(target);
+  else noteTabActivity(tab);
+  if (pendingDrawBytes() > DRAW_HOLD_BYTES) signalOutputHold(true);
 }
 
 function send(obj) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); }
@@ -3829,9 +4215,10 @@ const LS_WORKSPACE = 'sshterm.workspace.default';
 const BUF_MAX = 200 * 1024;   // 每标签保留最近 200KB 输出, 刷新后重放
 let tabsSaveTimer = null;
 function scheduleTabsSave() {
-  clearTimeout(tabsSaveTimer);
+  if (tabsSaveTimer) return;
   tabsSaveTimer = setTimeout(() => {
     tabsSaveTimer = null;
+    commitAllReplay();
     saveTabs();
   }, 250);
 }
@@ -3849,6 +4236,7 @@ function stripTruncatedSequence(text) {
 }
 function saveTabs() {
   try {
+    commitAllReplay();
     localStorage.setItem(tabsStorageKey(), JSON.stringify(tabs.map(t => ({
       id: t.id,
       cfg: configForBrowserStorage(t.cfg),
@@ -3857,6 +4245,7 @@ function saveTabs() {
       panes: (t.extraPanes || []).length,
       paneIds: (t.extraPanes || []).map(p => p.connId),
       paneBufs: (t.extraPanes || []).map(p => (p.recParts || []).join('')),
+      paneCfgs: (t.extraPanes || []).map(p => configForBrowserStorage(p.cfg || t.cfg)),
       split: { dir: splitDirection(t), ratio: splitRatio(t) },
       readonly: !!t.readonly,
     }))));
@@ -3889,6 +4278,7 @@ function restoreTabItems(list) {
       addPane(tab, split.dir, split.ratio, {
         id: item.paneIds?.[n],
         replay: item.paneBufs?.[n] || '',
+        cfg: item.paneCfgs?.[n],
       });
     }
   }
@@ -3992,6 +4382,7 @@ function newTab(cfg, opts = {}) {
   }
   bindTerminalExtras(term);
   term.open(host);
+  attachGpuRenderer(term);
   setTimeout(() => fitAddon.fit(), 0);
 
   // 主机信息条 (仅 SSH): 终端下方显示远端内存/负载/主机名/连接时长
@@ -4001,7 +4392,9 @@ function newTab(cfg, opts = {}) {
     hostinfoBar = document.getElementById(`hostinfo-${id}`);
   }
 
-  const tab = { id, cfg, term, host: container, state: 'idle', hex: !!(opts.hex ?? cfg.hexMode), fitAddon, searchAddon, imageAddon, recParts: [], recLen: 0, extraPanes: [], hostinfoBar, hostinfoTimer: null, connectedAt: 0 };
+  const tab = { id, cfg, term, host: container, state: 'idle', hex: !!(opts.hex ?? cfg.hexMode), fitAddon, searchAddon, imageAddon, recParts: [], recLen: 0, extraPanes: [], hostinfoBar, hostinfoTimer: null, connectedAt: 0, _focusTarget: null, oscTitle: '' };
+  tab._focusTarget = tab;
+  bindOscTitle(term, tab);
   tabs.push(tab);
   renderTabbar();
   activateTab(id);
@@ -4020,6 +4413,7 @@ function newTab(cfg, opts = {}) {
   }
   saveTabs();
 
+  bindOutputFocus(tab, tab);
   term.onData((d) => handleUserInput(tab, d));
   term.onResize(({ cols, rows }) => send({ type: 'resize', id, cols, rows }));
 
@@ -4108,11 +4502,20 @@ function doCloseTab(id) {
 
 function activateTab(id) {
   activeTabId = id;
+  const opened = tabs.find(t => t.id === id);
+  clearTabActivity(opened);
+  const maxBtn = $('btn-pane-max');
+  if (maxBtn) maxBtn.classList.toggle('on', !!(opened && opened._maximized));
   for (const t of tabs) {
     t.host.classList.toggle('hidden', t.id !== id);
     if (t.id === id) setTimeout(() => {
       if (t.cfg.type === 'vnc') { try { t.rfb?.focus(); } catch {} }
-      else { fitTerm(t); t.term?.focus(); }
+      else {
+        fitTerm(t);
+        const focus = t._focusTarget && t._focusTarget.term ? t._focusTarget : t;
+        flushTerminalDraw(focus);
+        try { focus.term.focus(); } catch {}
+      }
     }, 0);
   }
   renderTabbar();
@@ -4173,8 +4576,8 @@ function moveOpenTab(dragId, targetId, after = false) {
 }
 
 function clearTabDropTargets() {
-  document.querySelectorAll('.tab.dragging, .tab.drop-before, .tab.drop-after')
-    .forEach(el => el.classList.remove('dragging', 'drop-before', 'drop-after'));
+  document.querySelectorAll('.tab.dragging, .tab.drop-before, .tab.drop-after, .tab.drop-merge')
+    .forEach(el => el.classList.remove('dragging', 'drop-before', 'drop-after', 'drop-merge'));
 }
 
 function renderTabbar() {
@@ -4185,9 +4588,12 @@ function renderTabbar() {
     el.className = 'tab' + (t.id === activeTabId ? ' active' : '');
     el.draggable = true;
     const dot = t.state === 'connected' ? '🟢' : t.state === 'connecting' ? '🟡' : '🔴';
+    const activity = t.id === activeTabId ? '' : (t.activity || '');
     el.innerHTML = `
       <span class="t-state" title="${esc(t.stateMsg || '')}">${dot}</span>
-      <span class="t-name">${esc(t.cfg.name || (TYPE_ICON[t.cfg.type] + ' ' + (t.cfg.host || t.cfg.port)))}</span>
+      <span class="t-name">${esc(tabLabel(t))}</span>
+      ${activity === 'live' ? '<span class="t-activity" title="有新输出"></span>' : ''}
+      ${activity === 'done' ? '<span class="t-activity done" title="输出已停">完成</span>' : ''}
       <span class="t-close">✕</span>`;
     el.querySelector('.t-close').onclick = (e) => { e.stopPropagation(); requestCloseTab(t.id); };
     el.onclick = () => activateTab(t.id);
@@ -4205,18 +4611,26 @@ function renderTabbar() {
     el.addEventListener('dragover', (e) => {
       if (!draggingTabId || draggingTabId === t.id) return;
       e.preventDefault();
-      const after = e.clientX > el.getBoundingClientRect().left + el.offsetWidth / 2;
-      el.classList.toggle('drop-before', !after);
-      el.classList.toggle('drop-after', after);
+      const rect = el.getBoundingClientRect();
+      const x = rect.width ? (e.clientX - rect.left) / rect.width : 0.5;
+      el.classList.toggle('drop-before', x < 0.28);
+      el.classList.toggle('drop-after', x > 0.72);
+      el.classList.toggle('drop-merge', x >= 0.28 && x <= 0.72);
       e.dataTransfer.dropEffect = 'move';
     });
-    el.addEventListener('dragleave', () => el.classList.remove('drop-before', 'drop-after'));
+    el.addEventListener('dragleave', () => el.classList.remove('drop-before', 'drop-after', 'drop-merge'));
     el.addEventListener('drop', (e) => {
       if (!draggingTabId || draggingTabId === t.id) return;
       e.preventDefault();
       e.stopPropagation();
-      const after = e.clientX > el.getBoundingClientRect().left + el.offsetWidth / 2;
-      moveOpenTab(draggingTabId, t.id, after);
+      const rect = el.getBoundingClientRect();
+      const x = rect.width ? (e.clientX - rect.left) / rect.width : 0.5;
+      if (x >= 0.28 && x <= 0.72) {
+        const source = tabs.find(item => item.id === draggingTabId);
+        mergeTabInto(t, source, 'right');
+      } else {
+        moveOpenTab(draggingTabId, t.id, x > 0.72);
+      }
     });
     el.addEventListener('dragend', () => {
       draggingTabId = null;

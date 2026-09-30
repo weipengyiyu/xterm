@@ -99,6 +99,14 @@ button.mini { padding: 2px 8px; font-size: 11px; }
 .tab.dragging { opacity: .45; }
 .tab.drop-before { box-shadow: inset 2px 0 0 #3b82f6; }
 .tab.drop-after { box-shadow: inset -2px 0 0 #3b82f6; }
+.tab.drop-merge { background: #1e2a44; color: #c0caf5; }
+.t-activity {
+  width: 8px; height: 8px; border-radius: 50%; background: #e0af68; flex: 0 0 auto;
+}
+.t-activity.done {
+  width: auto; height: auto; border-radius: 0; background: none; color: #9ece6a; font-size: 10px;
+}
+#btn-pane-max.on { color: #7aa2f7; border-color: #7aa2f7; }
 #terms { flex: 1; position: relative; background: #1a1b26; }
 #terms .term-host { position: absolute; inset: 0; padding: 4px; }
 #terms .term-host.hidden { display: none; }
@@ -285,6 +293,23 @@ body.term-bell #toolbar { box-shadow: inset 0 -2px 0 #f59e0b; }
   border-radius: 3px; padding: 0 6px; font-size: 11px; cursor: pointer;
 }
 .pane-close:hover { background: rgba(239,68,68,.3); }
+#terms .split-container .term-host.pane-max-hidden { display: none !important; }
+#terms .split-container.pane-max { display: flex !important; }
+#terms .split-container.pane-max .term-host:not(.pane-max-hidden) {
+  flex: 1 1 auto !important; grid-column: 1 / -1 !important; grid-row: 1 / -1 !important;
+}
+#split-drop-overlay {
+  position: absolute; inset: 8px; z-index: 20; display: grid;
+  grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px;
+  pointer-events: auto;
+}
+#split-drop-overlay.hidden { display: none; }
+.split-drop-zone {
+  display: flex; align-items: center; justify-content: center;
+  border: 2px dashed #3b82f6; border-radius: 8px; color: #c0caf5;
+  background: rgba(26, 27, 38, .72); font-size: 14px;
+}
+.split-drop-zone.hot { background: rgba(59, 130, 246, .35); }
 
 /* 终端搜索条 */
 #search-bar {

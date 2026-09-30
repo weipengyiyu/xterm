@@ -13,7 +13,8 @@ function resumePausedConnections(ws, connections) {
   for (const [key, conn] of connections) {
     if (!key.startsWith(`${ws.windowId}:`) || conn.ownerWs !== ws || !conn._outputPaused) continue;
     conn._outputPaused = false;
-    try { conn.stream?.resume(); } catch {}
+    try { (conn._pausedIo || conn.stream)?.resume(); } catch {}
+    conn._pausedIo = null;
   }
 }
 

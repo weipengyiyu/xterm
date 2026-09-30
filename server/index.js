@@ -262,14 +262,40 @@ function bufferConnectionHistory(conn, data) {
   }
 }
 
+function pausableIo(conn) {
+  if (conn.stream && typeof conn.stream.pause === 'function') return conn.stream;
+  if (conn.sock && typeof conn.sock.pause === 'function') return conn.sock;
+  if (conn.sp && typeof conn.sp.pause === 'function') return conn.sp;
+  return null;
+}
+
+function pauseProducer(conn) {
+  if (!conn || conn._outputPaused) return;
+  const io = pausableIo(conn);
+  if (!io) return;
+  conn._outputPaused = true;
+  conn._pausedIo = io;
+  try { io.pause(); } catch { conn._outputPaused = false; conn._pausedIo = null; }
+}
+
+function holdOutputs(ws) {
+  ws._clientHold = true;
+  for (const [key, conn] of connections) {
+    if (!key.startsWith(`${ws.windowId}:`) || conn.ownerWs !== ws) continue;
+    pauseProducer(conn);
+  }
+}
+
+function releaseOutputs(ws) {
+  ws._clientHold = false;
+  resumePausedConnections(ws);
+}
+
 function sendConnectionData(conn, id, data) {
   bufferConnectionHistory(conn, data);
   const ownerWs = conn.ownerWs;
   if (!ownerWs || ownerWs.readyState !== 1) return;
-  if (isBackedUp(ownerWs) && conn.stream && typeof conn.stream.pause === 'function' && !conn._outputPaused) {
-    conn._outputPaused = true;
-    try { conn.stream.pause(); } catch {}
-  }
+  if ((ownerWs._clientHold || isBackedUp(ownerWs)) && !conn._outputPaused) pauseProducer(conn);
   sendBinary(ownerWs, id, data);
 }
 
@@ -429,6 +455,8 @@ const handle = createWsMessageHandler({
   doConnect,
   attachExistingConnection,
   sendConnectionData,
+  holdOutputs,
+  releaseOutputs,
   getConnection,
   connections,
   connectionKey,
