@@ -12,6 +12,10 @@
   <!-- 工具栏 -->
   <div id="toolbar">
     <button id="btn-new" title="新建连接 (Ctrl+N)">＋ 新建连接</button>
+    <div class="dropdown" id="wrap-local">
+      <button id="btn-local" title="打开本机终端 (PowerShell / CMD / WSL / Git Bash)">⌨ 本地</button>
+      <div id="menu-local" class="hidden"></div>
+    </div>
     <button id="btn-sftp" title="SSH 文件浏览/下载 (SFTP)">📁 文件</button>
     <button id="btn-tunnel" title="SSH 隧道管理" class="hidden">🔗 隧道</button>
     <button id="btn-killall" title="断开并关闭全部会话标签" class="danger">⏹ 全部关闭</button>
@@ -30,6 +34,7 @@
       </div>
     </div>
     <button id="btn-split" title="分屏(每次增加一格，最多 2×2 / 4 格；单格用 ✕ 关闭)">⊞ 分屏</button>
+    <button id="btn-broadcast" title="把键盘输入同步到所有已连接的终端标签和分屏" aria-pressed="false">⇄ 同步输入</button>
     <button id="btn-workspace" title="保存或恢复当前标签与分屏布局">▣ 工作区</button>
     <button id="btn-settings" title="终端外观设置 (字体/主题/滚动)">⚙ 设置</button>
     <button id="btn-cmds" title="快捷命令(保存/执行/脚本)">⚡ 命令</button>
@@ -143,6 +148,7 @@
           <option value="ssh">SSH</option>
           <option value="telnet">Telnet</option>
           <option value="vnc">VNC</option>
+          <option value="local">Local</option>
           <option value="serial">Serial</option>
         </select>
       </label>
@@ -215,7 +221,7 @@
         <p class="muted">直接连接目标 VNC 服务，不依赖 SSH/终端会话；连接后会打开独立标签页。</p>
       </div>
       <div class="grp" id="f-remember-wrap">
-        <label><input type="checkbox" id="f-remember"> 记住凭据（使用 Windows DPAPI 加密）</label>
+        <label id="f-remember-label"><input type="checkbox" id="f-remember"> 记住凭据（使用 Windows DPAPI 加密）</label>
         <label><input type="checkbox" id="f-session-log"> 记录会话日志（明文保存到本地文件，含终端输出）</label>
       </div>
       <div class="grp" id="grp-autocmds">
@@ -224,6 +230,14 @@
         </label>
       </div>
 
+      <div class="grp hidden" id="grp-local">
+        <label>Shell
+          <select id="l-shell"><option value="powershell">PowerShell</option></select>
+        </label>
+        <label>工作目录 <input id="l-cwd" placeholder="留空则使用用户主目录"></label>
+        <label><input type="checkbox" id="l-reconnect"> 进程退出后自动重开</label>
+        <p class="muted">在当前 Windows 用户权限下打开本机终端，不会把命令发到远程主机。</p>
+      </div>
       <!-- 串口字段 -->
       <div class="grp hidden" id="grp-serial">
         <label>端口
@@ -250,6 +264,13 @@
         <label><input type="checkbox" id="s-rtscts"> RTS/CTS 硬件流控</label>
         <label><input type="checkbox" id="s-reconnect" checked> 断线自动重连</label>
         <label><input type="checkbox" id="s-hex"> HEX 显示/发送</label>
+        <label>换行
+          <select id="s-newline">
+            <option value="cr" selected>CR</option>
+            <option value="lf">LF</option>
+            <option value="crlf">CRLF</option>
+          </select>
+        </label>
         <label><input type="checkbox" id="s-timestamp"> 接收显示时间戳</label>
         <label>触发关键字 <input id="s-trigger" placeholder="匹配后通知，不执行命令"></label>
         <div class="serial-controls">
@@ -486,6 +507,7 @@
 <script src="/vendor/@xterm/xterm/lib/xterm.js"></script>
 <script src="/vendor/@xterm/addon-fit/lib/addon-fit.js"></script>
 <script src="/vendor/@xterm/addon-search/lib/addon-search.js"></script>
+<script src="/vendor/@xterm/addon-web-links/lib/addon-web-links.js"></script>
 <script src="/vendor/@xterm/addon-image/lib/addon-image.js"></script>
 <script src="/js/dom.js"></script>
 <script src="/js/theme-settings.js"></script>

@@ -9,7 +9,7 @@ const os = require('os');
 const { randomUUID, randomBytes, createHash } = require('crypto');
 const { WebSocketServer } = require('ws');
 const { decodeBuffer, StreamingDecoder } = require('./encoding');
-const { sendBinary, WS_HIGH_WATER, attachWsBackpressure, queueDepth, isBackedUp } = require('./ws-backpressure');
+const { sendBinary, WS_HIGH_WATER, attachWsBackpressure, detachWsBackpressure, queueDepth, isBackedUp } = require('./ws-backpressure');
 const sshConnectScheduler = require('./ssh-connect-scheduler');
 const { createSecurity } = require('./security');
 const { createLogging } = require('./logging');
@@ -299,7 +299,8 @@ async function doConnect(ws, cfg, tabId) {
 
   const ConnCls = { ssh: require('./connections/ssh'),
                     telnet: require('./connections/telnet'),
-                    serial: require('./connections/serial') }[cfg.type];
+                    serial: require('./connections/serial'),
+                    local: require('./connections/local') }[cfg.type];
   if (!ConnCls) return send(ws, { type: 'error', id: tabId, msg: `未知协议: ${cfg.type}` });
 
   const conn = new ConnCls(cfg);
@@ -458,6 +459,7 @@ wss.on('connection', (ws, req) => {
   pingTimer.unref();
   ws.on('close', () => {
     clearInterval(pingTimer);
+    detachWsBackpressure(ws);
     wsCount--;
     scheduleIdleExit();
     if (windows.get(ws.windowId) === ws) {

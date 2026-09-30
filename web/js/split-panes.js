@@ -62,6 +62,7 @@ function createTerminal(host, tabOrPane) {
   term.loadAddon(fitAddon);
   const imageAddon = attachImageAddon(term, tabOrPane.cfg?.type);
   term.open(host);
+  bindTerminalExtras(term);
   // Clipboard/key bindings need the concrete terminal object. Split panes
   // previously reached bindClipboard while pane.term was still null, aborting
   // creation before layout and connection setup completed.

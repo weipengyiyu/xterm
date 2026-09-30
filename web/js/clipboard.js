@@ -31,14 +31,26 @@ function pasteClipboard(term) {
     (t) => { clearTimeout(timer); _clipBusy = false; if (t) term.paste(t); },
     () => { clearTimeout(timer); _clipBusy = false; setStatus('剪贴板读取被拒, 可用 Ctrl+Shift+V 粘贴'); });
 }
-function safeSendInput(id, data) {
+function applySerialNewline(cfg, data) {
+  if (!cfg || cfg.type !== 'serial' || cfg.hexMode) return data;
+  if (typeof data !== 'string') return data;
+  const mode = cfg.newline || 'cr';
+  if (mode !== 'cr' && mode !== 'lf' && mode !== 'crlf') return data;
+  const normalized = data.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  if (!normalized.includes('\n')) return data;
+  if (mode === 'lf') return normalized;
+  if (mode === 'crlf') return normalized.replace(/\n/g, '\r\n');
+  return normalized.replace(/\n/g, '\r');
+}
+function safeSendInput(id, data, encoding) {
   // xterm delivers a pasted block as one data event; require confirmation for
   // blocks containing more than one line before anything reaches a server.
   const lines = String(data).split(/[\r\n]/).filter(Boolean).length;
   if (lines > 1 && !confirm(`即将粘贴 ${lines} 行内容到远程会话。确认发送？`)) {
-    setStatus('已取消多行粘贴'); return;
+    setStatus('已取消多行粘贴'); return false;
   }
-  sendInput(id, data);
+  sendInput(id, data, encoding);
+  return true;
 }
 function bindClipboard(tab) {
   const { term, host } = tab;

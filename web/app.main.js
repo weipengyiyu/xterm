@@ -30,6 +30,20 @@ const SearchAddonCtor = (typeof SearchAddon === 'function') ? SearchAddon
   : (window.SearchAddon && window.SearchAddon.SearchAddon);
 const ImageAddonCtor = (typeof ImageAddon === 'function') ? ImageAddon
   : (window.ImageAddon && window.ImageAddon.ImageAddon);
+const WebLinksAddonCtor = (typeof WebLinksAddon === 'function') ? WebLinksAddon
+  : (window.WebLinksAddon && (window.WebLinksAddon.WebLinksAddon || window.WebLinksAddon));
+function bindTerminalExtras(term) {
+  if (!term) return;
+  if (WebLinksAddonCtor) {
+    try { term.loadAddon(new WebLinksAddonCtor()); } catch (e) { /* 链接插件缺失时终端仍可用 */ }
+  }
+  term.onBell(() => {
+    setStatus('终端响铃');
+    document.body.classList.add('term-bell');
+    clearTimeout(bindTerminalExtras._timer);
+    bindTerminalExtras._timer = setTimeout(() => document.body.classList.remove('term-bell'), 700);
+  });
+}
 if (typeof Terminal !== 'function' || !FitAddonCtor) {
   document.body.innerHTML = '<div style="padding:40px;font:14px sans-serif;color:#f87171">' +
     '❌ 终端核心加载失败(xterm.js / addon-fit), 请刷新或检查服务端资源。</div>';
@@ -87,7 +101,43 @@ function handleUserInput(tab, data) {
     }
   }
   tab._inputLine = line;
-  safeSendInput(connId, data, tab.cfg?.encoding);
+  const payload = applySerialNewline(tab.cfg, data);
+  if (!safeSendInput(connId, payload, tab.cfg?.encoding)) return;
+  broadcastInputToOthers(tab, data);
+}
+
+let broadcastInput = false;
+try { broadcastInput = localStorage.getItem('sshterm.broadcast') === '1'; } catch {}
+
+function inputTargetId(target) {
+  return target.connId != null ? target.connId : target.id;
+}
+function terminalInputTargets() {
+  const out = [];
+  for (const tab of tabs) {
+    if (!tab || tab.cfg?.type === 'vnc' || tab.cfg?.type === 'replay' || !tab.term) continue;
+    out.push(tab);
+    for (const pane of tab.extraPanes || []) {
+      if (pane && pane.term) out.push(pane);
+    }
+  }
+  return out;
+}
+function syncBroadcastButton() {
+  const btn = $('btn-broadcast');
+  if (!btn) return;
+  btn.classList.toggle('active', broadcastInput);
+  btn.setAttribute('aria-pressed', broadcastInput ? 'true' : 'false');
+}
+function broadcastInputToOthers(source, data) {
+  if (!broadcastInput || source?._fromBroadcast) return;
+  for (const target of terminalInputTargets()) {
+    if (target === source) continue;
+    if (target.state !== 'connected') continue;
+    const id = inputTargetId(target);
+    if (id == null) continue;
+    sendInput(id, applySerialNewline(target.cfg, data), target.cfg?.encoding);
+  }
 }
 
 function pickDisplayPaths(rest) {
@@ -185,7 +235,8 @@ document.addEventListener('keydown', (e) => {
   }
 }, true);
 
-const TYPE_ICON = { ssh: '🖥️', telnet: '🔌', vnc: '🖼️', serial: '🔗' };
+const TYPE_ICON = { ssh: '🖥️', telnet: '🔌', vnc: '🖼️', serial: '🔗', local: '⌨' };
+let localShells = [];
 const STATE_TEXT = { connecting: '连接中…', connected: '● 已连接', closed: '✕ 已断开' };
 const SENSITIVE_CONFIG_KEYS = new Set(['password', 'privateKey', 'passphrase', 'loginPass']);
 
@@ -287,6 +338,7 @@ function onWsOpen() {
   $('conn-status-text').textContent = '服务器已连接';
   send({ type: 'list' });
   send({ type: 'serialports' });
+  send({ type: 'local-shells' });
   if (tabs.length) reattachLiveTabs();
   else restoreTabs();
 }
@@ -472,6 +524,11 @@ function handleMsg(m) {
         };
       });
       $('sshcfg-dialog-mask').classList.remove('hidden');
+      break;
+    }
+    case 'local-shells': {
+      localShells = Array.isArray(m.shells) ? m.shells : [];
+      renderLocalShells();
       break;
     }
     case 'sessions': {
@@ -841,6 +898,7 @@ function newTab(cfg, opts = {}) {
       }
     });
   }
+  bindTerminalExtras(term);
   term.open(host);
   setTimeout(() => fitAddon.fit(), 0);
 
@@ -1328,8 +1386,12 @@ function openDlg(existing = null) {
   $('s-rtscts').checked = !!existing?.rtscts;
   $('s-reconnect').checked = existing?.reconnect !== false;
   $('s-hex').checked = !!existing?.hexMode;
+  $('s-newline').value = ['cr', 'lf', 'crlf'].includes(existing?.newline) ? existing.newline : 'cr';
   $('s-timestamp').checked = !!existing?.timestamp;
   $('s-trigger').value = existing?.trigger || '';
+  if ($('l-shell') && existing?.shell) $('l-shell').value = existing.shell;
+  $('l-cwd').value = existing?.cwd || '';
+  $('l-reconnect').checked = !!existing?.reconnect;
   updateDlgFields();
   $('dlg-mask').classList.remove('hidden');
   $('f-name').focus();
@@ -1341,7 +1403,9 @@ function updateDlgFields() {
   $('grp-telnet').classList.toggle('hidden', type !== 'telnet');
   $('grp-vnc').classList.toggle('hidden', type !== 'vnc');
   $('grp-serial').classList.toggle('hidden', type !== 'serial');
+  $('grp-local').classList.toggle('hidden', type !== 'local');
   $('f-remember-wrap').classList.toggle('hidden', type === 'serial');
+  $('f-remember-label')?.classList.toggle('hidden', type === 'local');
   $('grp-autocmds').classList.toggle('hidden', type === 'vnc' || type === 'serial');
   const auth = $('f-auth').value;
   $('f-pwd-wrap').classList.toggle('hidden', auth !== 'password' && auth !== 'keyboard-interactive');
@@ -1402,6 +1466,13 @@ function collectDlg() {
       loginUser: $('t-user').value.trim() || undefined,
       loginPass: $('t-pass').value || undefined,
     });
+  } else if (type === 'local') {
+    Object.assign(base, {
+      shell: $('l-shell').value || 'powershell',
+      cwd: $('l-cwd').value.trim() || undefined,
+      reconnect: $('l-reconnect').checked,
+    });
+    base.rememberPassword = false;
   } else if (type === 'vnc') {
     Object.assign(base, {
       host: $('v-host').value.trim(),
@@ -1421,6 +1492,7 @@ function collectDlg() {
       rtscts: $('s-rtscts').checked,
       reconnect: $('s-reconnect').checked,
       hexMode: $('s-hex').checked,
+      newline: $('s-newline').value || 'cr',
       timestamp: $('s-timestamp').checked,
       trigger: $('s-trigger').value.trim() || undefined,
     });
@@ -1692,6 +1764,16 @@ function runAutoCmds(cfg, tabId) {
   runCommandScript(tab, all);
 }
 
+syncBroadcastButton();
+$('btn-broadcast').onclick = () => {
+  broadcastInput = !broadcastInput;
+  try { localStorage.setItem('sshterm.broadcast', broadcastInput ? '1' : '0'); } catch {}
+  syncBroadcastButton();
+  const n = terminalInputTargets().filter(t => t.state === 'connected').length;
+  setStatus(broadcastInput
+    ? `同步输入已开启（当前 ${n} 个已连接终端）`
+    : '同步输入已关闭');
+};
 $('btn-cmds').onclick = () => {
   const tab = tabs.find(t => t.id === activeTabId);
   cmdKey = sessionCmdKey(tab ? tab.cfg : null);
@@ -1848,6 +1930,56 @@ function exportVisibleLogs() {
 // ---------- SSH 隧道 UI → web/js/tunnel-ui.js ----------
 // ---------- VNC 独立会话标签 → web/js/vnc-ui.js ----------
 // ---------- 事件绑定 ----------
+function renderLocalShells() {
+  const available = localShells.filter(s => s.available);
+  const sel = $('l-shell');
+  if (sel) {
+    const current = sel.value || 'powershell';
+    const options = available.length ? available : localShells;
+    sel.innerHTML = options.map(s =>
+      `<option value="${esc(s.id)}"${s.available ? '' : ' disabled'}>${esc(s.label)}</option>`).join('')
+      || '<option value="powershell">PowerShell</option>';
+    if ([...sel.options].some(o => o.value === current)) sel.value = current;
+  }
+  const menu = $('menu-local');
+  if (!menu) return;
+  menu.innerHTML = '';
+  const items = available.length ? available : [];
+  if (!items.length) {
+    const empty = document.createElement('button');
+    empty.type = 'button';
+    empty.disabled = true;
+    empty.textContent = '没有检测到本机 Shell';
+    menu.appendChild(empty);
+    return;
+  }
+  for (const shell of items) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = shell.label;
+    button.onclick = (e) => {
+      e.stopPropagation();
+      menu.classList.add('hidden');
+      openLocalShell(shell.id);
+    };
+    menu.appendChild(button);
+  }
+}
+function openLocalShell(shellId) {
+  const shell = localShells.find(s => s.id === shellId);
+  newTab({
+    name: shell ? shell.label : '本地终端',
+    type: 'local',
+    shell: shellId,
+    reconnect: false,
+  });
+}
+$('btn-local').onclick = (e) => {
+  e.stopPropagation();
+  $('menu-more')?.classList.add('hidden');
+  $('menu-local').classList.toggle('hidden');
+  if (!localShells.length) send({ type: 'local-shells' });
+};
 $('btn-new').onclick = () => openDlg();
 $('btn-welcome-new').onclick = () => openDlg();
 // ---------- 更多工具下拉 (日志/语言/定时/扫描) ----------
@@ -1855,7 +1987,10 @@ $('btn-more').onclick = (e) => {
   e.stopPropagation();
   $('menu-more').classList.toggle('hidden');
 };
-document.addEventListener('click', () => $('menu-more').classList.add('hidden'));
+document.addEventListener('click', () => {
+  $('menu-more').classList.add('hidden');
+  $('menu-local')?.classList.add('hidden');
+});
 $('mi-log').onclick = () => { $('menu-more').classList.add('hidden'); openLogPanel(); };
 $('mi-lang').onclick = () => { $('menu-more').classList.add('hidden'); toggleLang(); };
 $('mi-timer').onclick = () => {

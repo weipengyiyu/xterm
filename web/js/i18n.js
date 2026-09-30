@@ -6,8 +6,9 @@ var Sshterm = window.Sshterm;
 // ---------- 国际化 (中/英) ----------
 var I18N = {
   zh: {
-    btn_new: '＋ 新建连接', btn_log: '📋 日志',
+    btn_new: '＋ 新建连接', btn_local: '⌨ 本地', btn_log: '📋 日志',
     btn_sftp: '📁 文件', btn_killall: '⏹ 全部关闭', btn_lang: '🌐 EN', btn_split: '⊞ 分屏',
+    btn_broadcast: '⇄ 同步输入',
     dl_title_new: '新建连接', dl_title_edit: '编辑会话',
     dl_conn: '连接', dl_save_conn: '保存并连接', dl_cancel: '取消',
     f_name: '会话名称', f_type: '类型', f_host: '主机', f_port: '端口',
@@ -36,8 +37,9 @@ var I18N = {
     ws_ok: '服务器已连接', ws_off: '服务器已断开', ws_init: '未连接服务器',
   },
   en: {
-    btn_new: '＋ New', btn_log: '📋 Log',
+    btn_new: '＋ New', btn_local: '⌨ Local', btn_log: '📋 Log',
     btn_sftp: '📁 Files', btn_killall: '⏹ Close All', btn_lang: '🌐 中文', btn_split: '⊞ Split',
+    btn_broadcast: '⇄ Broadcast',
     dl_title_new: 'New Connection', dl_title_edit: 'Edit Session',
     dl_conn: 'Connect', dl_save_conn: 'Save & Connect', dl_cancel: 'Cancel',
     f_name: 'Name', f_type: 'Type', f_host: 'Host', f_port: 'Port',
@@ -75,12 +77,13 @@ const DOM_TEXT_EN = {
   '自定义常用快捷键 (保存在本机 localStorage)。点击输入框后按下新组合键。': 'Customize common shortcuts (saved in localStorage). Click a field and press a new combo.',
   '点击后按下新快捷键': 'Click then press a new shortcut',
   'sshterm — SSH / Telnet / VNC / 串口': 'sshterm — SSH / Telnet / VNC / Serial',
-  '＋ 新建连接': '＋ New Connection', '💾 保存会话': '💾 Save Session', '📁 文件': '📁 Files',
+  '＋ 新建连接': '＋ New Connection', '⌨ 本地': '⌨ Local', '💾 保存会话': '💾 Save Session', '📁 文件': '📁 Files',
   '🔗 隧道': '🔗 Tunnels', '⏹ 全部关闭': '⏹ Close All', '☰ 工具': '☰ Tools',
   '📋 操作日志': '📋 Operation Log', '🌐 切换语言': '🌐 Language', '⏱ 定时发送': '⏱ Timed Send',
   '🔍 端口扫描': '🔍 Port Scan', '⇄ 导入 / 导出会话': '⇄ Import / Export Sessions',
   '⏺ 开始原始抓包': '⏺ Start Raw Capture', '⏺ 开始会话录制': '⏺ Start Recording',
   '▶ 导入并回放录制': '▶ Import & Replay Recording', '⊞ 分屏': '⊞ Split',
+  '⇄ 同步输入': '⇄ Broadcast', '换行': 'Newline',
   '▣ 工作区': '▣ Workspace', '⚡ 命令': '⚡ Commands', '已保存会话': 'Saved Sessions',
   '默认': 'Default',
   '☑ 批量': '☑ Batch', '🔑 SSH 配置': '🔑 SSH Config', '全选': 'Select All',
@@ -114,6 +117,10 @@ const DOM_TEXT_EN = {
   '波特率': 'Baud Rate', '数据位': 'Data Bits', '停止位': 'Stop Bits', '校验位': 'Parity',
   '编码': 'Encoding', 'RTS/CTS 硬件流控': 'RTS/CTS Hardware Flow Control',
   'HEX 显示/发送': 'HEX Display/Send', '接收显示时间戳': 'Show Receive Timestamps',
+  '工作目录': 'Working Directory', '进程退出后自动重开': 'Restart after the process exits',
+  '没有检测到本机 Shell': 'No local shell detected',
+  '在当前 Windows 用户权限下打开本机终端，不会把命令发到远程主机。':
+    'Opens a local terminal as the current Windows user. Commands stay on this machine.',
   '触发关键字': 'Trigger Keyword', '发送 Break': 'Send Break', '连接': 'Connect',
   '保存并连接': 'Save & Connect', '— 常用路径 —': '— Common Paths —', '无代理': 'No Proxy',
   '键盘交互/MFA': 'Keyboard Interactive / MFA', 'SSH Agent（含 FIDO2）': 'SSH Agent (including FIDO2)',
@@ -175,10 +182,14 @@ const DOM_TEXT_EN = {
 const DOM_ATTR_EN = {
   '过滤会话…': 'Filter sessions…',
   '终端外观设置 (字体/主题/滚动)': 'Terminal appearance (font / theme / scrollback)',
-  '新建连接 (Ctrl+N)': 'New Connection (Ctrl+N)', '保存当前会话配置': 'Save Current Session',
+  '新建连接 (Ctrl+N)': 'New Connection (Ctrl+N)',
+  '打开本机终端 (PowerShell / CMD / WSL / Git Bash)': 'Open a local terminal (PowerShell / CMD / WSL / Git Bash)',
+  '保存当前会话配置': 'Save Current Session',
   'SSH 文件浏览/下载 (SFTP)': 'Browse/Download Files (SFTP)', 'SSH 隧道管理': 'SSH Tunnel Management',
   '断开并关闭全部会话标签': 'Disconnect and Close All Tabs', '更多工具': 'More Tools',
-  '分屏(每次增加一格，最多 2×2 / 4 格；单格用 ✕ 关闭)': 'Split (add pane up to 2×2 / 4; close with ✕)', '保存或恢复当前标签与分屏布局': 'Save or Restore Tabs and Split Layout',
+  '分屏(每次增加一格，最多 2×2 / 4 格；单格用 ✕ 关闭)': 'Split (add pane up to 2×2 / 4; close with ✕)',
+  '把键盘输入同步到所有已连接的终端标签和分屏': 'Mirror keyboard input to every connected terminal tab and split pane',
+  '保存或恢复当前标签与分屏布局': 'Save or Restore Tabs and Split Layout',
   '快捷命令(保存/执行/脚本)': 'Quick Commands', 'IP[:端口] 回车快速连接': 'IP[:port] — Enter to connect',
   '服务器连接状态': 'Server Connection Status', '批量管理': 'Batch Management', '解析 SSH config': 'Parse SSH Config',
   '拖动调整已保存会话宽度': 'Drag to Resize Saved Sessions',
@@ -196,7 +207,8 @@ const DOM_ATTR_EN = {
   '如: 开发板串口': 'e.g. Board Serial', '如: 开发板 / 服务器': 'e.g. Boards / Servers',
   '密码': 'Password', '可选': 'Optional', '或手动输入私钥路径': 'Or Enter a Private Key Path',
   '用户名': 'Username', '留空则使用跳板链中的用户或目标用户': 'Leave blank to use the jump-chain or target username',
-  '刷新串口列表': 'Refresh Serial Ports', '匹配后通知，不执行命令': 'Notify on match; do not execute commands',
+  '刷新串口列表': 'Refresh Serial Ports', '留空则使用用户主目录': 'Leave blank to use the user profile directory',
+  '匹配后通知，不执行命令': 'Notify on match; do not execute commands',
   'VNC 密码': 'VNC Password', '如: 查看内核日志': 'e.g. View Kernel Log', '如: dmesg | tail -50': 'e.g. dmesg | tail -50',
   '按顺序执行全部命令': 'Run All Commands in Order', '要定时发送的内容': 'Content to Send',
   '至少 12 个字符': 'At Least 12 Characters',
@@ -273,8 +285,9 @@ var LANG = localStorage.getItem('sshterm.lang') || 'zh';
 function t(key) { return (I18N[LANG] && I18N[LANG][key]) || I18N.zh[key] || key; }
 function applyI18n() {
   const map = {
-    'btn-new': 'btn_new',
+    'btn-new': 'btn_new', 'btn-local': 'btn_local',
     'btn-sftp': 'btn_sftp', 'btn-killall': 'btn_killall', 'btn-split': 'btn_split',
+    'btn-broadcast': 'btn_broadcast',
     'side-title': 'side_title', 'btn-batch': 'side_batch', 'side-foot': 'side_foot',
   };
   const filterEl = document.getElementById('session-filter');

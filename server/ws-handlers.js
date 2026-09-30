@@ -51,6 +51,14 @@ function createWsMessageHandler(ctx) {
       send(ws, { type: 'sessions', list: sessionsList() });
       break;
     }
+    case 'local-shells': {
+      const { listShells } = require('./local-shells');
+      send(ws, {
+        type: 'local-shells',
+        shells: listShells().map(({ id, label, available }) => ({ id, label, available })),
+      });
+      break;
+    }
     // 前端每隔几秒请求一次远端主机状态 (内存/负载/主机名); 断开即停, 无需服务端定时器
     case 'hostinfo': {
       const conn = getConnection(ws, m.id);

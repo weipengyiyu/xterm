@@ -16,6 +16,11 @@ function connectionConfigForRequest(source, fallback = {}) {
 // Double-clicking a different saved session must not inherit that live socket.
 function connectionTargetsMatch(existingCfg, requested) {
   if (!existingCfg || !requested) return true;
+  if (existingCfg.type === 'local' || requested.type === 'local') {
+    return existingCfg.type === 'local' && requested.type === 'local'
+      && (existingCfg.shell || 'powershell') === (requested.shell || 'powershell')
+      && String(existingCfg.cwd || '') === String(requested.cwd || '');
+  }
   if (!requested.host && !requested.username && !requested.user) return true;
   const hostA = String(existingCfg.host || '').trim().toLowerCase();
   const hostB = String(requested.host || '').trim().toLowerCase();
