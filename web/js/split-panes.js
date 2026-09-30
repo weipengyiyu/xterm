@@ -250,6 +250,7 @@ function togglePaneMaximize(tab) {
   if (btn) btn.classList.toggle('on', !!turningOn && tab.id === activeTabId);
   setTimeout(() => {
     [tab, ...(tab.extraPanes || [])].forEach(x => { try { x.fitAddon?.fit(); } catch {} });
+    scheduleVisibleDraws(tab);
   }, 30);
   setStatus(turningOn ? '当前分屏已铺满' : '已恢复分屏');
 }

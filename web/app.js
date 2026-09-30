@@ -3021,6 +3021,7 @@ function togglePaneMaximize(tab) {
   if (btn) btn.classList.toggle('on', !!turningOn && tab.id === activeTabId);
   setTimeout(() => {
     [tab, ...(tab.extraPanes || [])].forEach(x => { try { x.fitAddon?.fit(); } catch {} });
+    scheduleVisibleDraws(tab);
   }, 30);
   setStatus(turningOn ? '当前分屏已铺满' : '已恢复分屏');
 }
@@ -3624,6 +3625,8 @@ function onWsOpen() {
 }
 
 function onWsClose(ev) {
+  outputHoldSent = false;
+  drawBusy = false;
   $('conn-status').className = 'status-dot err';
   if (ev && ev.code === 4001) {
     $('conn-status-text').textContent = '页面已刷新，正在恢复…';
@@ -3664,7 +3667,9 @@ connectWebSocket();
 
 const DRAW_HOLD_BYTES = 256 * 1024;
 const DRAW_CAP_BYTES = 512 * 1024;
+const DRAW_FRAME_CHARS = 32 * 1024;
 let outputHoldSent = false;
+let drawBusy = false;
 
 function addonCtor(globalName, exportName) {
   const value = window[globalName];
@@ -3701,20 +3706,38 @@ function attachGpuRenderer(term) {
   }
 }
 function bindOutputFocus(ownerTab, target) {
-  const el = target && target.term && target.term.textarea;
-  if (!ownerTab || !el) return;
-  if (el._outputFocusHandler) el.removeEventListener('focus', el._outputFocusHandler);
-  el._outputFocusHandler = () => {
+  if (!ownerTab || !target) return;
+  const mark = () => {
     ownerTab._focusTarget = target;
-    flushTerminalDraw(target);
+    scheduleTerminalDraw(target);
   };
-  el.addEventListener('focus', el._outputFocusHandler);
+  const el = target.term && target.term.textarea;
+  if (el) {
+    if (el._outputFocusHandler) el.removeEventListener('focus', el._outputFocusHandler);
+    el._outputFocusHandler = mark;
+    el.addEventListener('focus', el._outputFocusHandler);
+  }
+  const paneHost = target._ownerTab
+    ? target.host
+    : (target.host && target.host.querySelector(':scope > .term-host.main-pane'));
+  if (!paneHost) return;
+  if (paneHost._outputPointerHandler) paneHost.removeEventListener('pointerdown', paneHost._outputPointerHandler);
+  paneHost._outputPointerHandler = mark;
+  paneHost.addEventListener('pointerdown', mark);
 }
 function bindOscTitle(term, target) {
   if (!term || target == null || typeof term.onTitleChange !== 'function' || term._oscTitleBound) return;
   term._oscTitleBound = true;
   term.onTitleChange((title) => {
-    target.oscTitle = String(title || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 80);
+    const clean = String(title || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 80);
+    if ((target.oscTitle || '') === clean) return;
+    target.oscTitle = clean;
+    const tab = target._ownerTab || target;
+    if (tabLabel(tab) === tab._shownLabel) return;
+    if (typeof draggingTabId !== 'undefined' && draggingTabId) {
+      tab._titleDirty = true;
+      return;
+    }
     scheduleTabbarRender();
   });
 }
@@ -3753,10 +3776,22 @@ function noteTabActivity(tab) {
   }, 1500);
   if (was !== 'live') scheduleTabbarRender();
 }
+function paneHostEl(target) {
+  if (!target) return null;
+  if (target._ownerTab) return target.host || null;
+  return target.host ? target.host.querySelector(':scope > .term-host.main-pane') : null;
+}
 function isDrawTarget(target) {
   const tab = (target && target._ownerTab) || target;
   if (!tab || typeof activeTabId === 'undefined' || tab.id !== activeTabId) return false;
-  return (tab._focusTarget || tab) === target;
+  if (tab.host && tab.host.classList.contains('hidden')) return false;
+  const host = paneHostEl(target);
+  return !(host && host.classList.contains('pane-max-hidden'));
+}
+function scheduleVisibleDraws(tab) {
+  if (!tab || tab.cfg?.type === 'vnc') return;
+  scheduleTerminalDraw(tab);
+  for (const pane of tab.extraPanes || []) scheduleTerminalDraw(pane);
 }
 function signalOutputHold(hold) {
   if (outputHoldSent === hold) return;
@@ -3792,11 +3827,13 @@ function pushDrawText(target, text) {
 function flushTerminalDraw(target) {
   if (!target || !target.term || target._writing) return;
   if (!target._pending || !target._pending.length || !isDrawTarget(target)) return;
-  const parts = target._pending;
+  if (drawBusy) {
+    scheduleTerminalDraw(target);
+    return;
+  }
+  let text = target._pending.join('');
   target._pending = [];
-  const pendingBytes = target._pendingBytes || 0;
   target._pendingBytes = 0;
-  let text = parts.join('');
   const tab = target._ownerTab || target;
   if (!target._ownerTab && tab.cfg && tab.cfg.type === 'serial' && tab.cfg.timestamp) {
     text = `[${new Date().toLocaleTimeString()}] ` + text;
@@ -3804,15 +3841,33 @@ function flushTerminalDraw(target) {
   if (!target._ownerTab && tab.cfg && tab.cfg.type === 'serial' && tab.cfg.trigger && text.includes(tab.cfg.trigger)) {
     setStatus(`串口触发：${tab.cfg.trigger}`);
   }
+  if (text.length > DRAW_FRAME_CHARS) {
+    let cut = DRAW_FRAME_CHARS;
+    const lead = text.charCodeAt(cut - 1);
+    if (lead >= 0xD800 && lead <= 0xDBFF) cut -= 1;
+    const rest = text.slice(cut);
+    text = text.slice(0, cut);
+    target._pending = [rest];
+    target._pendingBytes = rest.length;
+  }
+  const pendingBytes = text.length + (target._pendingBytes || 0);
+  drawBusy = true;
   target._writing = true;
   let finished = false;
   const done = () => {
     if (finished) return;
     finished = true;
     clearTimeout(target._writeTimer);
+    drawBusy = false;
     target._writing = false;
     signalOutputHold(pendingDrawBytes() > DRAW_HOLD_BYTES || anyTerminalWriting());
     if (target._pending && target._pending.length) scheduleTerminalDraw(target);
+    for (const item of tabs) {
+      if (item !== target && item._pending && item._pending.length) scheduleTerminalDraw(item);
+      for (const pane of item.extraPanes || []) {
+        if (pane !== target && pane._pending && pane._pending.length) scheduleTerminalDraw(pane);
+      }
+    }
   };
   target._writeTimer = setTimeout(done, 2000);
   try { target.term.write(text, done); }
@@ -4214,13 +4269,22 @@ const LS_TABS = tabsStorageKey();
 const LS_WORKSPACE = 'sshterm.workspace.default';
 const BUF_MAX = 200 * 1024;   // 每标签保留最近 200KB 输出, 刷新后重放
 let tabsSaveTimer = null;
+let tabsSaveSince = 0;
 function scheduleTabsSave() {
+  if (!tabsSaveSince) tabsSaveSince = Date.now();
   if (tabsSaveTimer) return;
+  const busy = anyTerminalWriting() || pendingDrawBytes() > DRAW_FRAME_CHARS;
+  const delay = busy && Date.now() - tabsSaveSince < 5000 ? 1000 : 800;
   tabsSaveTimer = setTimeout(() => {
     tabsSaveTimer = null;
+    if ((anyTerminalWriting() || pendingDrawBytes() > DRAW_FRAME_CHARS) && Date.now() - tabsSaveSince < 5000) {
+      scheduleTabsSave();
+      return;
+    }
+    tabsSaveSince = 0;
     commitAllReplay();
     saveTabs();
-  }, 250);
+  }, delay);
 }
 // The 200 KB replay snapshot can end in the middle of an inline image.  Writing
 // a truncated Sixel/OSC/APC payload leaves the xterm parser inside the sequence,
@@ -4418,11 +4482,15 @@ function newTab(cfg, opts = {}) {
   term.onResize(({ cols, rows }) => send({ type: 'resize', id, cols, rows }));
 
   // 窗口尺寸变化 → 重新适配（2×2 网格分隔条按比例跟随）
-  const ro = new ResizeObserver(() => {
-    if (activeTabId === id) {
-      fitTerm(tab);
-      if (countPanes(tab) >= 3) positionGridDividers(tab);
-    }
+  let boxW = 0;
+  let boxH = 0;
+  const ro = new ResizeObserver((entries) => {
+    const rect = entries[0] && entries[0].contentRect;
+    if (!rect || activeTabId !== id) return;
+    if (Math.abs(rect.width - boxW) < 2 && Math.abs(rect.height - boxH) < 2) return;
+    boxW = rect.width;
+    boxH = rect.height;
+    scheduleFit(tab);
   });
   ro.observe(container);
   tab._resizeObserver = ro;
@@ -4437,6 +4505,18 @@ function newTab(cfg, opts = {}) {
 function fitTerm(tab) {
   if (!tab?.fitAddon) return;
   try { tab.fitAddon.fit(); } catch (e) { /* 忽略 */ }
+}
+function scheduleFit(tab) {
+  if (!tab || tab._fitRaf) return;
+  tab._fitRaf = requestAnimationFrame(() => {
+    tab._fitRaf = 0;
+    if (!tab.host || tab.host.classList.contains('hidden') || activeTabId !== tab.id) return;
+    fitTerm(tab);
+    for (const pane of tab.extraPanes || []) {
+      try { pane.fitAddon?.fit(); } catch {}
+    }
+    if (countPanes(tab) >= 3) positionGridDividers(tab);
+  });
 }
 
 function syncTerminalSize(target, id) {
@@ -4511,9 +4591,9 @@ function activateTab(id) {
     if (t.id === id) setTimeout(() => {
       if (t.cfg.type === 'vnc') { try { t.rfb?.focus(); } catch {} }
       else {
-        fitTerm(t);
+        scheduleFit(t);
+        scheduleVisibleDraws(t);
         const focus = t._focusTarget && t._focusTarget.term ? t._focusTarget : t;
-        flushTerminalDraw(focus);
         try { focus.term.focus(); } catch {}
       }
     }, 0);
@@ -4635,7 +4715,12 @@ function renderTabbar() {
     el.addEventListener('dragend', () => {
       draggingTabId = null;
       clearTabDropTargets();
+      if (tabs.some(item => item._titleDirty)) {
+        for (const item of tabs) item._titleDirty = false;
+        renderTabbar();
+      }
     });
+    t._shownLabel = tabLabel(t);
     bar.appendChild(el);
   }
   if (!tabs.length) $('tabbar').innerHTML = '<span class="muted" style="padding:8px 12px">无连接 — 双击左侧会话或新建</span>';
