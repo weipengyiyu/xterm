@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-CN" translate="no" class="notranslate">
+<head>
+<meta charset="utf-8">
+<meta name="google" content="notranslate">
+<title>sshterm — SSH / Telnet / VNC / 串口</title>
+<link rel="stylesheet" href="/vendor/@xterm/xterm/css/xterm.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- 工具栏 -->
+  <div id="toolbar">
+    <button id="btn-new" title="新建连接 (Ctrl+N)">＋ 新建连接</button>
+    <button id="btn-sftp" title="SSH 文件浏览/下载 (SFTP)">📁 文件</button>
+    <button id="btn-tunnel" title="SSH 隧道管理" class="hidden">🔗 隧道</button>
+    <button id="btn-killall" title="断开并关闭全部会话标签" class="danger">⏹ 全部关闭</button>
+    <div class="dropdown" id="wrap-more">
+      <button id="btn-more" title="更多工具">☰ 工具</button>
+      <div id="menu-more" class="hidden">
+        <button id="mi-log">📋 操作日志</button>
+        <button id="mi-lang">🌐 切换语言</button>
+        <button id="mi-timer">⏱ 定时发送</button>
+        <button id="mi-scan">🔍 端口扫描</button>
+        <button id="mi-transfer">⇄ 导入 / 导出会话</button>
+        <button id="mi-capture">⏺ 开始原始抓包</button>
+        <button id="mi-record">⏺ 开始会话录制</button>
+        <button id="mi-replay">▶ 导入并回放录制</button>
+        <input id="recording-import-file" type="file" accept="application/json,.json" class="hidden">
+      </div>
+    </div>
+    <button id="btn-split" title="分屏(每次增加一格，最多 2×2 / 4 格；单格用 ✕ 关闭)">⊞ 分屏</button>
+    <button id="btn-workspace" title="保存或恢复当前标签与分屏布局">▣ 工作区</button>
+    <button id="btn-settings" title="终端外观设置 (字体/主题/滚动)">⚙ 设置</button>
+    <button id="btn-cmds" title="快捷命令(保存/执行/脚本)">⚡ 命令</button>
+    <span class="sep"></span>
+    <input id="quick-connect" placeholder="IP[:端口] 回车快速连接" style="width:180px; background:#1a1b2e; color:#c0caf5; border:1px solid #3a3b4d; border-radius:4px; padding:2px 8px; font-size:12px" autocomplete="off">
+    <span class="sep"></span>
+    <span id="conn-status" class="status-dot idle" title="服务器连接状态"></span>
+    <span id="conn-status-text">未连接服务器</span>
+    <span class="spacer"></span>
+    <span id="srv-addr" class="muted"></span>
+  </div>
+
+  <!-- 主区 -->
+  <div id="main">
+    <!-- 左侧: 会话列表 -->
+    <aside id="sidebar">
+      <div class="side-head">
+        <span id="side-title">已保存会话</span>
+        <span>
+          <button id="btn-batch" title="批量管理" class="mini">☑ 批量</button>
+          <button id="btn-refresh" title="刷新">⟳</button>
+          <button id="btn-sshcfg" title="解析 SSH config" class="mini">🔑 SSH 配置</button>
+        </span>
+      </div>
+      <input id="session-filter" type="search" placeholder="过滤会话…" autocomplete="off" spellcheck="false">
+      <ul id="session-list"></ul>
+      <div id="batch-bar" class="hidden">
+        <label><input type="checkbox" id="batch-all"> 全选</label>
+        <button id="batch-del" class="danger mini"><span id="batch-del-text">删除选中</span>(<span id="batch-n">0</span>)</button>
+        <button id="batch-cancel" class="mini">取消</button>
+      </div>
+      <div class="side-foot muted" id="side-foot">双击连接 · 悬停可编辑/删除</div>
+    </aside>
+    <div id="sidebar-divider" title="拖动调整已保存会话宽度"></div>
+
+    <!-- 右侧: 标签 + 终端 -->
+    <div id="workspace">
+      <div id="tabbar"></div>
+      <div id="search-bar" class="hidden">
+        <input id="search-input" placeholder="搜索 (Enter=下一个, Shift+Enter=上一个, Esc=关闭)" autocomplete="off">
+        <button id="search-prev" class="mini" title="上一个">▲</button>
+        <button id="search-next" class="mini" title="下一个">▼</button>
+        <button id="search-close" class="mini" title="关闭">✕</button>
+        <span id="search-count" class="muted"></span>
+      </div>
+      <div id="terms"></div>
+      <!-- SFTP 文件面板 (SSH) -->
+            <div id="sftp-panel" class="hidden">
+              <!-- P2 FIX: 添加可拖拽的分隔线 -->
+              <div id="sftp-divider"></div>
+              <div class="sftp-head">
+                <button id="sftp-up" class="mini" title="上级目录">⬆</button>
+                <input id="sftp-path" readonly title="当前目录">
+                <button id="sftp-upload" class="mini" title="上传文件到当前目录">⬆️传</button>
+                <button id="sftp-upload-dir" class="mini" title="上传整个文件夹(含子目录)">📂传</button>
+                <button id="sftp-refresh" class="mini" title="刷新">⟳</button>
+                <button id="sftp-toggle-select" class="mini" title="多选文件/目录后批量下载">☑ 多选</button>
+                <button id="sftp-select-all" class="mini hidden" title="全选当前目录">全选</button>
+                <button id="sftp-download-selected" class="mini hidden" title="下载选中项(目录递归展开)">⬇ 下载选中</button>
+                <button id="sftp-pick-download-dir" class="mini" title="选择下载保存的本地目录">📂 本地目录</button>
+                <button id="sftp-download-current-dir" class="mini" title="将当前远端目录下载到本地目录">⬇ 下载当前目录</button>
+                <button id="sftp-close" class="mini" title="关闭面板">✕</button>
+              </div>
+              <div id="sftp-download-dir-hint" class="sftp-download-dir-hint muted">本地目录: <span id="sftp-download-dir-label">未选择（下载前需指定）</span></div>
+              <div id="sftp-select-bar" class="sftp-select-bar hidden">已选 <span id="sftp-select-count">0</span> 项 · 目录将递归下载全部文件</div>
+        <input type="file" id="sftp-file-input" class="hidden" multiple>
+        <input type="file" id="sftp-dir-input" class="hidden" webkitdirectory>
+        <div id="sftp-progress" class="hidden">
+          <div id="sftp-progress-bar"><div id="sftp-progress-fill"></div></div>
+          <span id="sftp-progress-text"></span>
+          <button id="sftp-cancel-transfer" class="mini danger hidden" title="取消当前下载">取消</button>
+        </div>
+        <div id="sftp-tasks" class="hidden"><button id="sftp-queue-toggle" class="mini">⏸ 暂停队列</button></div>
+        <div id="sftp-failures" class="hidden">
+          <div class="sftp-failures-title">下载失败</div>
+          <div id="sftp-failures-list"></div>
+        </div>
+        <div id="sftp-columns">
+          <section id="sftp-local-column" class="sftp-column"><div class="sftp-col-title">本地待传文件</div><div id="sftp-local-list"></div></section>
+          <div id="sftp-columns-divider" title="拖动调整本地与远端目录宽度"></div>
+          <section id="sftp-remote-column" class="sftp-column"><div class="sftp-col-title">远端目录</div><div id="sftp-list"></div></section>
+        </div>
+        <div class="sftp-status" id="sftp-status"></div>
+      </div>
+      <div id="welcome" class="hidden">
+        <div class="welcome-box">
+          <h1>sshterm</h1>
+          <p>SSH · Telnet · VNC · 串口 一体化连接工具</p>
+          <button id="btn-welcome-new">＋ 新建连接</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 状态栏 -->
+  <div id="statusbar">
+    <span id="sb-left">就绪</span>
+    <span id="sb-right"></span>
+  </div>
+</div>
+
+<!-- 新建/编辑会话对话框 -->
+<div id="dlg-mask" class="hidden">
+  <div id="dlg">
+    <h3 id="dlg-title">新建连接</h3>
+    <div class="form">
+      <label>会话名称 <input id="f-name" placeholder="如: 开发板串口"></label>
+      <label>分组 <input id="f-group" placeholder="如: 开发板 / 服务器"></label>
+      <label>类型
+        <select id="f-type">
+          <option value="ssh">SSH</option>
+          <option value="telnet">Telnet</option>
+          <option value="vnc">VNC</option>
+          <option value="serial">Serial</option>
+        </select>
+      </label>
+
+      <!-- SSH 字段 -->
+      <div class="grp" id="grp-ssh">
+        <label>主机 <input id="f-host" placeholder="192.168.1.100"></label>
+        <label>端口 <input id="f-port" type="number" value="22" style="width:90px"></label>
+        <label>用户名 <input id="f-user" placeholder="root"></label>
+        <label>认证方式
+          <select id="f-auth">
+            <option value="password">密码</option>
+            <option value="key">密钥</option>
+            <option value="keyboard-interactive">键盘交互/MFA</option>
+            <option value="agent">SSH Agent（含 FIDO2）</option>
+          </select>
+        </label>
+        <label id="f-pwd-wrap">密码 <input id="f-password" type="password" placeholder="密码"></label>
+        <label id="f-key-wrap" class="hidden">私钥路径
+          <select id="f-key-sel" style="width:100%;margin-bottom:4px" onchange="document.getElementById('f-key').value=this.value; this.value=''">
+            <option value="">— 常用路径 —</option>
+            <option value="C:\Users\Administrator\.ssh\id_rsa">~/.ssh/id_rsa</option>
+            <option value="C:\Users\Administrator\.ssh\id_ed25519">~/.ssh/id_ed25519</option>
+          </select>
+          <input id="f-key" placeholder="或手动输入私钥路径">
+        </label>
+        <label id="f-pass-wrap" class="hidden">密钥口令 <input id="f-passphrase" type="password" placeholder="可选"></label>
+        <label>代理
+          <select id="f-proxy-type">
+            <option value="">无代理</option>
+            <option value="socks5">SOCKS5</option>
+            <option value="http">HTTP CONNECT</option>
+          </select>
+        </label>
+        <label id="f-proxy-wrap" class="hidden">代理地址 <input id="f-proxy-host" placeholder="127.0.0.1" style="width:140px">
+          <input id="f-proxy-port" type="number" placeholder="1080" style="width:80px"></label>
+        <label id="f-proxy-auth-wrap" class="hidden">代理认证
+          <input id="f-proxy-user" placeholder="用户名" style="width:120px">
+          <input id="f-proxy-password" type="password" placeholder="密码" style="width:120px"></label>
+        <label>跳板链 (ProxyJump)
+          <input id="f-jump" placeholder="user@bastion1:22,bastion2:22">
+        </label>
+        <div id="f-jump-auth-wrap" class="hidden">
+          <label>跳板凭据（整条跳板链共用，独立于目标主机）</label>
+          <label>跳板用户 <input id="f-jump-user" placeholder="留空则使用跳板链中的用户或目标用户"></label>
+          <label>跳板认证
+            <select id="f-jump-auth"><option value="password">密码</option><option value="key">密钥</option><option value="agent">SSH Agent</option></select>
+          </label>
+          <label id="f-jump-pwd-wrap">跳板密码 <input id="f-jump-password" type="password"></label>
+          <label id="f-jump-key-wrap" class="hidden">跳板私钥路径 <input id="f-jump-key" placeholder="C:\\Users\\...\\.ssh\\id_ed25519"></label>
+          <label id="f-jump-pass-wrap" class="hidden">跳板密钥口令 <input id="f-jump-passphrase" type="password"></label>
+        </div>
+      </div>
+
+      <!-- Telnet 字段 -->
+      <div class="grp hidden" id="grp-telnet">
+        <label>主机 <input id="t-host" placeholder="192.168.1.100"></label>
+        <label>端口 <input id="t-port" type="number" value="23" style="width:90px"></label>
+        <label><input type="checkbox" id="t-autologin"> 自动登录</label>
+        <label id="t-user-wrap" class="hidden">用户名 <input id="t-user"></label>
+        <label id="t-pass-wrap2" class="hidden">密码 <input id="t-pass" type="password"></label>
+      </div>
+      <!-- VNC 字段 -->
+      <div class="grp hidden" id="grp-vnc">
+        <label>VNC 主机 <input id="v-host" placeholder="192.168.1.100"></label>
+        <label>端口 <input id="v-port" type="number" value="5901" min="1" max="65535" style="width:90px"></label>
+        <label>密码 <input id="v-password" type="password" autocomplete="current-password" placeholder="VNC 密码"></label>
+        <label><input type="checkbox" id="v-view-only"> 只读模式</label>
+        <label><input type="checkbox" id="v-reconnect" checked> 断线自动重连</label>
+        <p class="muted">直接连接目标 VNC 服务，不依赖 SSH/终端会话；连接后会打开独立标签页。</p>
+      </div>
+      <div class="grp" id="f-remember-wrap">
+        <label><input type="checkbox" id="f-remember"> 记住凭据（使用 Windows DPAPI 加密）</label>
+        <label><input type="checkbox" id="f-session-log"> 记录会话日志（明文保存到本地文件，含终端输出）</label>
+      </div>
+      <div class="grp" id="grp-autocmds">
+        <label>连接后自动执行(每行一条)
+          <textarea id="f-autocmds" rows="3" placeholder="如:&#10;ls&#10;dmesg | tail -20"></textarea>
+        </label>
+      </div>
+
+      <!-- 串口字段 -->
+      <div class="grp hidden" id="grp-serial">
+        <label>端口
+          <select id="s-port"><option value="">(加载中…)</option></select>
+          <button id="s-refresh" class="mini" title="刷新串口列表">⟳</button>
+        </label>
+        <label>波特率
+          <select id="s-baud">
+            <option>9600</option><option>19200</option><option>38400</option>
+            <option>57600</option><option selected>115200</option>
+            <option>230400</option><option>460800</option><option>921600</option>
+          </select>
+        </label>
+        <label>数据位 <select id="s-data"><option>8</option><option>7</option><option>6</option><option>5</option></select></label>
+        <label>停止位 <select id="s-stop"><option>1</option><option>2</option></select></label>
+        <label>校验位 <select id="s-parity"><option value="none">None</option><option value="even">Even</option><option value="odd">Odd</option></select></label>
+        <label>编码
+          <select id="s-encoding">
+            <option value="utf-8" selected>UTF-8</option>
+            <option value="gbk">GBK (嵌入式常见)</option>
+            <option value="latin1">Latin-1 (ISO-8859-1)</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="s-rtscts"> RTS/CTS 硬件流控</label>
+        <label><input type="checkbox" id="s-reconnect" checked> 断线自动重连</label>
+        <label><input type="checkbox" id="s-hex"> HEX 显示/发送</label>
+        <label><input type="checkbox" id="s-timestamp"> 接收显示时间戳</label>
+        <label>触发关键字 <input id="s-trigger" placeholder="匹配后通知，不执行命令"></label>
+        <div class="serial-controls">
+          <button type="button" id="s-dtr" class="mini">DTR</button>
+          <button type="button" id="s-rts" class="mini">RTS</button>
+          <button type="button" id="s-break" class="mini">发送 Break</button>
+        </div>
+      </div>
+    </div>
+    <div class="dlg-actions">
+      <button id="btn-dlg-conn" class="primary">连接</button>
+      <button id="btn-dlg-save">保存并连接</button>
+      <button id="btn-dlg-cancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- SSH 配置解析弹窗 -->
+<div id="sshcfg-dialog-mask" class="hidden">
+  <div id="sshcfg-dialog">
+    <h3>SSH 配置 (SSH config)</h3>
+    <p class="muted">发现以下 Host 条目 (点击填充表单):</p>
+    <table id="sshcfg-list" style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead><tr style="background:#2a2b3a;"><th>Host</th><th>Host</th><th>Port</th><th>User</th><th>Key</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button id="sshcfg-close" class="mini danger" style="margin-top:8px;">关闭</button>
+  </div>
+</div>
+
+<!-- 关闭会话确认对话框 -->
+<div id="dlg-close-mask" class="hidden">
+  <div id="dlg-close">
+    <h3>⚠️ 关闭会话?</h3>
+    <p id="close-info"></p>
+    <div class="dlg-actions">
+      <button id="btn-close-ok" class="danger">确认关闭</button>
+      <button id="btn-close-cancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 快捷命令面板 -->
+<div id="dlg-cmds-mask" class="hidden">
+  <div id="dlg-cmds">
+    <h3>⚡ 快捷命令 <button id="cmds-close" class="mini" style="float:right">✕</button></h3>
+    <div id="cmd-cur" class="muted" style="margin-bottom:8px"></div>
+    <div class="form">
+      <label>命令名称 <input id="cmd-name" placeholder="如: 查看内核日志"></label>
+      <label>命令内容 <input id="cmd-content" placeholder="如: dmesg | tail -50" style="font-family:Consolas,monospace"></label>
+      <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="cmd-auto"> 连接后自动执行此命令集</label>
+      <div class="dlg-actions">
+        <button id="btn-cmd-add" class="primary">保存命令</button>
+        <button id="btn-cmd-runall" title="按顺序执行全部命令">执行全部</button>
+      </div>
+    </div>
+    <div id="cmd-list"></div>
+    <div class="muted cmd-foot">点击命令=立即发送到当前会话;连接后自动执行见"新建连接→SSH/Telnet→连接后执行"</div>
+  </div>
+</div>
+
+<!-- 串口占用对话框 -->
+<div id="dlg-occ-mask" class="hidden">
+  <div id="dlg-occ">
+    <h3>🔌 串口被占用</h3>
+    <p id="occ-msg" class="muted"></p>
+    <p class="muted" style="font-size:11px">等待重试: 占用方释放后自动连接;强制释放: 重启该串口设备(需管理员确认 UAC),其他程序将断开</p>
+    <div class="dlg-actions">
+      <button id="btn-occ-wait" class="primary">⏳ 等待重试</button>
+      <button id="btn-occ-force">⚡ 强制释放</button>
+      <button id="btn-occ-cancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<div id="dlg-mfa-mask" class="hidden">
+  <div id="dlg-mfa">
+    <h3>SSH 多因素认证</h3>
+    <p id="mfa-target" class="muted"></p>
+    <p id="mfa-instructions" class="muted"></p>
+    <div id="mfa-prompts" class="form"></div>
+    <div class="dlg-actions">
+      <button id="btn-mfa-submit" class="primary">提交</button>
+      <button id="btn-mfa-cancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 端口扫描对话框 -->
+<div id="dlg-scan-mask" class="hidden">
+  <div id="dlg-scan">
+    <h3>🔍 端口扫描</h3>
+    <div class="form">
+      <label>目标 <input id="scan-host" placeholder="192.168.1.216 或 192.168.1.0/24 或 192.168.1.1-254"></label>
+      <div class="muted">单 IP → 全端口扫描;网段(含 / 或 -) → 网络扫描, 发现整个子网设备</div>
+    </div>
+    <div class="dlg-actions">
+      <button id="btn-scan-start" class="primary">扫描</button>
+      <button id="btn-scan-close">关闭</button>
+    </div>
+    <div id="scan-result"></div>
+  </div>
+</div>
+
+<!-- SSH 隧道管理抽屉 -->
+<div id="dlg-tunnel-mask" class="hidden">
+  <div id="dlg-tunnel">
+    <h3>🔗 SSH 隧道 <button id="tunnel-close" class="mini" style="float:right">✕</button></h3>
+    <p class="muted" style="margin-bottom:8px">为当前 SSH 会话创建端口转发/跳板隧道</p>
+    <div id="tunnel-list" style="margin-bottom:10px"></div>
+    <div class="form">
+      <label>类型
+        <select id="tn-type">
+          <option value="local">本地转发 Local (本地端口 → 远端:端口)</option>
+          <option value="remote">远端转发 Remote (远端端口 → 本地:端口)</option>
+          <option value="dynamic">动态转发 Dynamic (SOCKS5 代理)</option>
+        </select>
+      </label>
+      <label>本地监听端口 <input id="tn-local" placeholder="1080" style="width:120px"></label>
+      <label>远端目标 <input id="tn-remote" placeholder="127.0.0.1:80" style="width:220px"></label>
+      <div class="dlg-actions">
+        <button id="btn-tunnel-add" class="primary">新建隧道</button>
+        <button id="btn-tunnel-refresh">刷新</button>
+      </div>
+    </div>
+    <p class="muted cmd-foot">单会话最多 8 条隧道;端口冲突时会提示失败</p>
+  </div>
+</div>
+
+<!-- 定时发送对话框 -->
+<div id="dlg-timer-mask" class="hidden">
+  <div id="dlg-timer">
+    <h3>⏱ 定时发送</h3>
+    <div class="form">
+      <label>发送内容 <input id="tm-content" placeholder="要定时发送的内容"></label>
+      <label>周期(毫秒) <input id="tm-interval" type="number" value="1000" min="100"></label>
+      <label><input type="checkbox" id="tm-hex"> 按 HEX 发送</label>
+      <label><input type="checkbox" id="tm-auto"> 立即开始</label>
+    </div>
+    <div class="dlg-actions">
+      <button id="btn-tm-start" class="primary">开始</button>
+      <button id="btn-tm-stop">停止</button>
+      <button id="btn-tm-cancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 默认工作区管理 -->
+<div id="dlg-workspace-mask" class="hidden">
+  <div id="dlg-workspace">
+    <h3>▣ 默认工作区 <button id="workspace-close" class="mini" style="float:right">✕</button></h3>
+    <p class="muted">保存或恢复当前打开的会话标签、标签顺序以及分屏布局。恢复时会关闭当前连接并重新建立已保存的会话。</p>
+    <div id="workspace-snapshot-summary" class="workspace-summary">尚未保存工作区</div>
+    <div class="dlg-actions">
+      <button id="workspace-save" class="primary">保存当前工作区</button>
+      <button id="workspace-restore">恢复已保存工作区</button>
+    </div>
+    <p class="muted cmd-foot">工作区不会把密码或私钥保存到浏览器；未记住凭据的会话恢复后可能需要重新认证。</p>
+  </div>
+</div>
+
+<!-- 操作日志对话框 -->
+<div id="dlg-log-mask" class="hidden">
+  <div id="dlg-log">
+    <h3>📋 操作日志 <button id="log-close" class="mini" style="float:right">✕</button></h3>
+    <button id="log-bookmarks" class="mini">★ 仅看书签</button>
+    <button id="log-audit" class="mini">🔐 仅看审计</button>
+    <button id="log-export" class="mini">⬇ 导出 CSV</button>
+    <div id="log-file" class="log-foot muted" style="word-break:break-all">日志文件: 加载中…</div>
+    <div id="log-list"></div>
+    <div class="log-foot muted">每次启动工具自动新建日志文件, 关闭后保留在本地</div>
+  </div>
+</div>
+
+<!-- 会话导入 / 导出 -->
+<div id="dlg-transfer-mask" class="hidden">
+  <div id="dlg-transfer">
+    <h3>⇄ 导入 / 导出会话 <button id="transfer-close" class="mini" style="float:right">✕</button></h3>
+    <section class="transfer-section">
+      <h4>导出 sshterm 加密备份</h4>
+      <p class="muted">备份以 AES-256-GCM 加密，可跨设备导入；口令无法找回。</p>
+      <label>备份口令 <input id="backup-passphrase" type="password" minlength="12" placeholder="至少 12 个字符"></label>
+      <label>确认口令 <input id="backup-passphrase-confirm" type="password" minlength="12"></label>
+      <button id="backup-export" class="primary">⬇ 导出加密备份</button>
+    </section>
+    <section class="transfer-section">
+      <h4>导入 sshterm 加密备份</h4>
+      <input id="backup-import-file" type="file" accept="application/json,.json">
+      <label>备份口令 <input id="backup-import-passphrase" type="password" minlength="12"></label>
+      <button id="backup-import">⬆ 导入备份</button>
+    </section>
+    <section class="transfer-section">
+      <h4>导入 OpenSSH config</h4>
+      <p class="muted">导入具体 Host；通配符、Match 和 Include 规则会跳过。不会导入密码。</p>
+      <input id="openssh-import-file" type="file" accept="text/plain,.conf,.config">
+      <button id="openssh-import">⬆ 导入 OpenSSH config</button>
+    </section>
+  </div>
+</div>
+
+
+<div id="dlg-settings-mask" class="hidden">
+  <div id="dlg-settings" class="dlg" style="min-width:420px">
+    <h3>终端外观设置</h3>
+    <p class="muted" style="font-size:12px;margin-top:0">字体、主题与滚动回退保存在本机浏览器 (localStorage)，对新旧终端立即生效。</p>
+    <label>配色主题
+      <select id="set-theme"></select>
+    </label>
+    <label>字体家族
+      <input id="set-font-family" type="text" placeholder='Consolas, "Courier New", monospace' style="width:100%">
+    </label>
+    <label>字号 (px)
+      <input id="set-font-size" type="number" min="10" max="32" step="1" style="width:100px">
+    </label>
+    <label>滚动回退行数
+      <input id="set-scrollback" type="number" min="500" max="100000" step="500" style="width:120px">
+    </label>
+    <label style="display:flex;align-items:center;gap:8px">
+      <input id="set-cursor-blink" type="checkbox"> 光标闪烁
+    </label>
+    <h4 style="margin:12px 0 6px">快捷键</h4>
+    <p class="muted" style="font-size:12px;margin:0 0 8px">自定义常用快捷键 (保存在本机 localStorage)。点击输入框后按下新组合键。</p>
+    <div id="hotkey-editor" class="hotkey-editor"></div>
+    <div class="dlg-actions">
+      <button id="btn-settings-apply" class="primary">应用</button>
+      <button id="btn-settings-reset">恢复默认</button>
+      <button id="settings-close">取消</button>
+    </div>
+  </div>
+</div>
+
+<script src="/bootstrap.js"></script>
+<script src="/encoding-client.js"></script>
+<script src="/vendor/@xterm/xterm/lib/xterm.js"></script>
+<script src="/vendor/@xterm/addon-fit/lib/addon-fit.js"></script>
+<script src="/vendor/@xterm/addon-search/lib/addon-search.js"></script>
+<script src="/vendor/@xterm/addon-image/lib/addon-image.js"></script>
+<script src="/js/dom.js"></script>
+<script src="/js/theme-settings.js"></script>
+<script src="/js/i18n.js"></script>
+<script src="/js/host-cpu.js"></script>
+<script src="/js/clipboard.js"></script>
+<script src="/js/reconnect.js"></script>
+<script src="/js/tunnel-ui.js"></script>
+<script src="/js/sftp-panel.js"></script>
+<script src="/js/sftp-xfer.js"></script>
+<script src="/js/vnc-ui.js"></script>
+<script src="/js/hotkeys.js"></script>
+<script src="/js/split-panes.js"></script>
+<script src="/app.main.js"></script>
+</body>
+</html>

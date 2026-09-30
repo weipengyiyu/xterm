@@ -1,0 +1,125 @@
+// HTTP transport integration for Range download and upload resource limits.
+// Uses the explicitly enabled local SFTP fixture; no SSH server is required.
+const assert = require('assert');
+const fs = require('fs');
+const http = require('http');
+const os = require('os');
+const path = require('path');
+const { spawn } = require('child_process');
+
+const ROOT = path.join(__dirname, '..');
+const net = require('net');
+let PORT = Number(process.env.SSHTERM_TEST_PORT) || 0;
+const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-sftp-'));
+const profile = path.join(temp, 'profile');
+const tokenFile = path.join(profile, '.sshterm', 'token');
+const fixture = path.join(temp, 'remote');
+let clientToken = '';
+let BASE = '';
+fs.mkdirSync(fixture, { recursive: true });
+fs.writeFileSync(path.join(fixture, 'range.txt'), '0123456789');
+fs.mkdirSync(path.join(fixture, 'folder'), { recursive: true });
+fs.writeFileSync(path.join(fixture, 'folder', 'one.bin'), Buffer.alloc(4096, 1));
+fs.writeFileSync(path.join(fixture, 'folder', 'two.bin'), Buffer.alloc(8192, 2));
+
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+async function waitForServer(deadline = Date.now() + 15000) {
+  while (Date.now() < deadline) {
+    try {
+      await new Promise((resolve, reject) => http.get(BASE, res => {
+        res.resume();
+        res.statusCode === 200 ? resolve() : reject(new Error(`HTTP ${res.statusCode}`));
+      }).on('error', reject));
+      if (fs.existsSync(tokenFile)) return;
+    } catch {}
+    await sleep(100);
+  }
+  throw new Error('server startup timed out');
+}
+async function loadToken() {
+  clientToken = fs.readFileSync(tokenFile, 'utf8').trim();
+  if (!clientToken) throw new Error('token file empty');
+}
+function request(method, target, headers = {}, body) {
+  return new Promise((resolve, reject) => {
+    const join = target.includes('?') ? '&' : '?';
+    const req = http.request(`${BASE}${target}${join}token=${encodeURIComponent(clientToken)}`, {
+      method,
+      headers: { 'X-SSHTERM-Token': clientToken, ...headers },
+    }, res => {
+      const chunks = []; res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }));
+    });
+    req.on('error', reject);
+    if (body !== undefined) req.end(body); else req.end();
+  });
+}
+function pendingUpload(name) {
+  const req = http.request(`${BASE}/api/sftp/upload?conn=9900&path=.&name=${encodeURIComponent(name)}&token=${encodeURIComponent(clientToken)}`, {
+    method: 'PUT', headers: { 'Content-Length': '2', 'X-SSHTERM-Token': clientToken },
+  });
+  const done = new Promise((resolve, reject) => {
+    req.on('response', res => { const chunks = []; res.on('data', c => chunks.push(c)); res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks) })); });
+    req.on('error', reject);
+  });
+  req.write('x'); // deliberately keep one byte outstanding to occupy one slot
+  return { req, done };
+}
+
+(async () => {
+  if (!PORT) {
+    PORT = await new Promise((resolve, reject) => {
+      const probe = net.createServer();
+      probe.once('error', reject);
+      probe.listen(0, '127.0.0.1', () => {
+        const selected = probe.address().port;
+        probe.close(error => error ? reject(error) : resolve(selected));
+      });
+    });
+  }
+  BASE = `http://127.0.0.1:${PORT}`;
+  const server = spawn(process.execPath, ['server/index.js', '--port', String(PORT), '--no-open'], {
+    cwd: ROOT,
+    env: { ...process.env, USERPROFILE: profile, HOME: profile,
+      SSHTERM_TEST_SFTP_ROOT: fixture, SSHTERM_TEST_SFTP_MISSING_ENTRY: '1' },
+    stdio: 'ignore',
+  });
+  try {
+    await waitForServer();
+    await loadToken();
+    const partial = await request('GET', '/api/sftp/download?conn=9900&path=range.txt', { Range: 'bytes=3-6' });
+    assert.strictEqual(partial.status, 206, 'Range request status');
+    assert.strictEqual(partial.headers['content-range'], 'bytes 3-6/10', 'Range header');
+    assert.strictEqual(partial.body.toString(), '3456', 'Range response body');
+    const invalid = await request('GET', '/api/sftp/download?conn=9900&path=range.txt', { Range: 'bytes=20-' });
+    assert.strictEqual(invalid.status, 416, 'invalid Range rejected');
+
+    const first = pendingUpload('same.bin');
+    await sleep(100);
+    const duplicate = await request('PUT', '/api/sftp/upload?conn=9900&path=.&name=same.bin', { 'Content-Length': '1' }, 'y');
+    assert.strictEqual(duplicate.status, 409, 'same remote target must be exclusive');
+    const second = pendingUpload('two.bin');
+    const third = pendingUpload('three.bin');
+    await sleep(100);
+    const saturated = await request('PUT', '/api/sftp/upload?conn=9900&path=.&name=four.bin', { 'Content-Length': '1' }, 'z');
+    assert.strictEqual(saturated.status, 429, 'global upload concurrency cap');
+    [first, second, third].forEach(upload => upload.req.end('y'));
+    const completed = await Promise.all([first.done, second.done, third.done]);
+    assert(completed.every(result => result.status === 200), 'reserved uploads must complete');
+    assert.strictEqual(fs.readFileSync(path.join(fixture, 'same.bin'), 'utf8'), 'xy', 'upload result content');
+    const job = 'progress_test_123';
+    const archive = await request('GET', `/api/sftp/download-dir?conn=9900&path=folder&job=${job}`);
+    assert.strictEqual(archive.status, 200, 'directory archive status');
+    assert.strictEqual(archive.body.subarray(0, 2).toString(), 'PK', 'directory archive format');
+    const progress = await request('GET', `/api/sftp/download-progress?conn=9900&job=${job}`);
+    const jobState = JSON.parse(progress.body.toString());
+    assert.strictEqual(jobState.phase, 'done', 'directory progress completion');
+    assert.strictEqual(jobState.loaded, 12288, 'directory progress uses uncompressed remote bytes');
+    assert.strictEqual(jobState.filesDone, 3, 'directory progress includes skipped files');
+    assert.strictEqual(jobState.skipped, 1, 'directory download skips files removed after scanning');
+    console.log('✅ SFTP range and upload resource integration passed');
+  } finally {
+    server.kill();
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+})().catch(error => { console.error('❌', error.stack || error.message); process.exit(1); });
