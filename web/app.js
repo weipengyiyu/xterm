@@ -197,7 +197,85 @@ function applySettingsToAllTerminals(settings) {
   }
 }
 
+var FONT_PRESETS = [
+  { id: 'consolas', label: 'Consolas（Windows 常见）', value: 'Consolas, "Courier New", monospace' },
+  { id: 'cascadia', label: 'Cascadia Mono', value: 'Cascadia Mono, Consolas, monospace' },
+  { id: 'jetbrains', label: 'JetBrains Mono', value: 'JetBrains Mono, Consolas, monospace' },
+  { id: 'sarasa', label: '更纱黑体等宽（中文更清晰）', value: '"Sarasa Mono SC", Consolas, "Microsoft YaHei", monospace' },
+  { id: 'yahei', label: '微软雅黑 + Consolas', value: 'Consolas, "Microsoft YaHei", monospace' },
+  { id: 'custom', label: '自定义…', value: '' },
+];
+
+function matchFontPreset(fontFamily) {
+  const raw = String(fontFamily || '').trim();
+  const found = FONT_PRESETS.find(p => p.id !== 'custom' && p.value === raw);
+  return found ? found.id : 'custom';
+}
+
+function paintThemePreview(themeId) {
+  const box = document.getElementById('set-theme-preview');
+  const pack = BUILTIN_THEMES[themeId] || BUILTIN_THEMES['tokyo-night'];
+  if (!box || !pack) return;
+  const colors = [pack.theme.background, pack.theme.foreground, pack.theme.blue, pack.theme.green, pack.theme.red];
+  box.innerHTML = colors.map(c => `<i style="background:${c}"></i>`).join('');
+}
+
+function syncFontPresetUi(fontFamily) {
+  const preset = document.getElementById('set-font-preset');
+  const custom = document.getElementById('set-font-family');
+  if (!preset || !custom) return;
+  const id = matchFontPreset(fontFamily);
+  preset.value = id;
+  custom.classList.toggle('hidden', id !== 'custom');
+  if (id !== 'custom') custom.value = FONT_PRESETS.find(p => p.id === id).value;
+}
+
+function bindSettingsChrome() {
+  const nav = document.querySelector('#dlg-settings .settings-nav');
+  if (nav && !nav.dataset.bound) {
+    nav.dataset.bound = '1';
+    nav.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-settings-tab]');
+      if (!btn) return;
+      showSettingsTab(btn.getAttribute('data-settings-tab'));
+    });
+  }
+  const themeSel = document.getElementById('set-theme');
+  if (themeSel && !themeSel.dataset.bound) {
+    themeSel.dataset.bound = '1';
+    themeSel.addEventListener('change', () => paintThemePreview(themeSel.value));
+  }
+  const preset = document.getElementById('set-font-preset');
+  if (preset && !preset.dataset.bound) {
+    preset.dataset.bound = '1';
+    preset.innerHTML = FONT_PRESETS.map(p => `<option value="${p.id}">${p.label}</option>`).join('');
+    preset.addEventListener('change', () => {
+      const spec = FONT_PRESETS.find(p => p.id === preset.value) || FONT_PRESETS[0];
+      const custom = document.getElementById('set-font-family');
+      if (!custom) return;
+      if (spec.id === 'custom') {
+        custom.classList.remove('hidden');
+        custom.focus();
+      } else {
+        custom.value = spec.value;
+        custom.classList.add('hidden');
+      }
+    });
+  }
+}
+
+function showSettingsTab(name) {
+  const wanted = name === 'hotkeys' ? 'hotkeys' : 'appearance';
+  document.querySelectorAll('#dlg-settings [data-settings-tab]').forEach((btn) => {
+    btn.classList.toggle('active', btn.getAttribute('data-settings-tab') === wanted);
+  });
+  document.querySelectorAll('#dlg-settings [data-settings-page]').forEach((page) => {
+    page.classList.toggle('hidden', page.getAttribute('data-settings-page') !== wanted);
+  });
+}
+
 function fillSettingsForm(settings) {
+  bindSettingsChrome();
   const s = settings || loadTerminalSettings();
   const themeSel = document.getElementById('set-theme');
   const fontFamily = document.getElementById('set-font-family');
@@ -209,8 +287,10 @@ function fillSettingsForm(settings) {
       .map(([id, t]) => `<option value="${id}">${t.name}</option>`)
       .join('');
     themeSel.value = s.themeId;
+    paintThemePreview(s.themeId);
   }
   if (fontFamily) fontFamily.value = s.fontFamily;
+  syncFontPresetUi(s.fontFamily);
   if (fontSize) fontSize.value = String(s.fontSize);
   if (scrollback) scrollback.value = String(s.scrollback);
   if (cursorBlink) cursorBlink.checked = !!s.cursorBlink;
@@ -229,6 +309,7 @@ function collectSettingsForm() {
 function openSettingsDialog() {
   if (typeof fillHotkeyEditor === 'function') fillHotkeyEditor();
   fillSettingsForm();
+  showSettingsTab('appearance');
   const mask = document.getElementById('dlg-settings-mask');
   if (mask) mask.classList.remove('hidden');
 }
@@ -397,12 +478,26 @@ const DOM_TEXT_EN = {
     'Wait and retry after the owner releases the port; force release restarts the device and requires UAC confirmation.',
   '目标': 'Target', '扫描': 'Scan', '单 IP → 全端口扫描;网段(含 / 或 -) → 网络扫描, 发现整个子网设备':
     'Single IP → full port scan; subnet (/ or -) → discover devices across the subnet.',
-  '🔗 SSH 隧道': '🔗 SSH Tunnels', '为当前 SSH 会话创建端口转发/跳板隧道': 'Create port forwarding for the current SSH session.',
-  '本地监听端口': 'Local Listen Port', '远端目标': 'Remote Target', '新建隧道': 'Add Tunnel', '刷新': 'Refresh',
-  '本地转发 Local (本地端口 → 远端:端口)': 'Local Forward (local port → remote host:port)',
-  '远端转发 Remote (远端端口 → 本地:端口)': 'Remote Forward (remote port → local host:port)',
-  '动态转发 Dynamic (SOCKS5 代理)': 'Dynamic Forward (SOCKS5 Proxy)',
+  'SSH 隧道': 'SSH Tunnels', '🔗 SSH 隧道': '🔗 SSH Tunnels',
+  '为当前 SSH 会话创建端口转发/跳板隧道': 'Create port forwarding for the current SSH session.',
+  '当前会话': 'Current session',
+  '已启用': 'Active', '新建转发': 'New Forward',
+  '把本机端口转到 SSH 对面那台机器上的服务。例如本机 18080 → 远端 127.0.0.1:80，浏览器访问 http://127.0.0.1:18080 即可。':
+    'Forward a local port to a service on the SSH host. Example: local 18080 → remote 127.0.0.1:80, then open http://127.0.0.1:18080.',
+  '本地转发': 'Local Forward', '远端转发': 'Remote Forward', 'SOCKS5': 'SOCKS5',
+  '本机监听端口': 'Local Listen Port', '本机目标端口': 'Local Target Port',
+  '本机 SOCKS 端口': 'Local SOCKS Port',
+  '远端目标': 'Remote Target', '远端目标 (主机:端口)': 'Remote Target (host:port)',
+  '远端监听端口': 'Remote Listen Port',
+  '本机访问：http://127.0.0.1:18080 → 远端 127.0.0.1:80': 'Local access: http://127.0.0.1:18080 → remote 127.0.0.1:80',
+  '创建隧道': 'Create Tunnel', '新建隧道': 'Add Tunnel', '刷新': 'Refresh', '复制': 'Copy', '删除': 'Delete',
+  '还没有隧道。': 'No tunnels yet.',
+  '在右侧选一种转发方式后点「创建隧道」。': 'Pick a forward type on the right, then click Create Tunnel.',
+  '加载中…': 'Loading…',
+  '单会话最多 8 条；只监听 127.0.0.1，不对外网开放。端口已被占用时会提示失败。':
+    'Up to 8 per session; listens on 127.0.0.1 only. Busy ports are reported as failures.',
   '单会话最多 8 条隧道;端口冲突时会提示失败': 'Up to 8 tunnels per session; port conflicts are reported.',
+  '隧道类型': 'Tunnel type',
   '发送内容': 'Content', '周期(毫秒)': 'Interval (ms)', '按 HEX 发送': 'Send as HEX', '立即开始': 'Start Immediately',
   '开始': 'Start', '停止': 'Stop', '▣ 默认工作区': '▣ Default Workspace',
   '保存或恢复当前打开的会话标签、标签顺序以及分屏布局。恢复时会关闭当前连接并重新建立已保存的会话。':
@@ -430,25 +525,50 @@ const DOM_TEXT_EN = {
   'SSH 多因素认证': 'SSH Multi-Factor Authentication',
   '提交': 'Submit',
   '⚙ 设置': '⚙ Settings',
-  '终端外观设置': 'Terminal Appearance',
-  '字体、主题与滚动回退保存在本机浏览器 (localStorage)，对新旧终端立即生效。':
-    'Font, theme, and scrollback are saved in this browser (localStorage) and apply to new and existing terminals.',
+  '设置': 'Settings',
+  '外观': 'Appearance',
+  '这里改终端长什么样。点右下角「应用」后立刻作用到已打开的标签，并保存在这台电脑的浏览器里。':
+    'Change how the terminal looks. Click Apply to update open tabs; settings stay in this browser.',
+  '点右侧组合键框，再按下新的按键。改完马上生效，不用点「应用」。按 Delete 或「还原」恢复该项默认。':
+    'Click a shortcut box, then press a new combo. Changes apply immediately. Delete or Reset restores the default.',
   '配色主题': 'Color Theme',
-  '字体家族': 'Font Family',
-  '字号 (px)': 'Font Size (px)',
-  '滚动回退行数': 'Scrollback Lines',
+  '文字、背景和光标颜色。默认 Tokyo Night。': 'Text, background, and cursor colors. Default is Tokyo Night.',
+  '字体': 'Font',
+  '选常见等宽字体；选「自定义」可手填 CSS 字体列表。': 'Pick a common monospace font, or choose Custom to type a CSS font stack.',
+  'Consolas（Windows 常见）': 'Consolas (common on Windows)',
+  'Cascadia Mono': 'Cascadia Mono',
+  'JetBrains Mono': 'JetBrains Mono',
+  '更纱黑体等宽（中文更清晰）': 'Sarasa Mono (clearer CJK)',
+  '微软雅黑 + Consolas': 'YaHei + Consolas',
+  '自定义…': 'Custom…',
+  '字号': 'Font Size',
+  '终端文字大小，单位像素。也可在终端里用快捷键加减。': 'Terminal text size in pixels. You can also change it with shortcuts.',
+  '回滚行数': 'Scrollback',
+  '向上滚动能看到多少历史输出。越大越占内存，一般 5000～20000 即可。':
+    'How many past lines you can scroll back. Larger uses more memory; 5000–20000 is typical.',
   '光标闪烁': 'Cursor Blink',
+  '块状光标是否闪动，方便看清当前输入位置。': 'Blink the block cursor so the insert point is easier to see.',
+  '启用闪烁': 'Enable blink',
+  '功能': 'Action',
+  '组合键': 'Shortcut',
+  '还原': 'Reset',
+  '行': 'lines',
   '应用': 'Apply',
   '恢复默认': 'Reset Defaults',
 };
 
 const DOM_ATTR_EN = {
   '过滤会话…': 'Filter sessions…',
-  '终端外观设置 (字体/主题/滚动)': 'Terminal appearance (font / theme / scrollback)',
+  '终端外观设置 (字体/主题/滚动)': 'Settings (appearance / hotkeys)',
+  '关闭': 'Close',
+  '设置分类': 'Settings categories',
+  '恢复这项默认快捷键': 'Restore this default shortcut',
+  '点击后按下新快捷键': 'Click then press a new shortcut',
   '新建连接 (Ctrl+N)': 'New Connection (Ctrl+N)',
   '打开本机终端 (PowerShell / CMD / WSL / Git Bash)': 'Open a local terminal (PowerShell / CMD / WSL / Git Bash)',
   '保存当前会话配置': 'Save Current Session',
   'SSH 文件浏览/下载 (SFTP)': 'Browse/Download Files (SFTP)', 'SSH 隧道管理': 'SSH Tunnel Management',
+  '复制访问地址': 'Copy access address', '删除': 'Delete', '关闭': 'Close',
   '断开并关闭全部会话标签': 'Disconnect and Close All Tabs', '更多工具': 'More Tools',
   '分屏(每次增加一格，最多 2×2 / 4 格；单格用 ✕ 关闭)': 'Split (add pane up to 2×2 / 4; close with ✕)',
   '临时铺满当前分屏，再按一次恢复': 'Temporarily maximize the focused pane; press again to restore',
@@ -1027,53 +1147,245 @@ Sshterm.scheduleReconnect = typeof scheduleReconnect === 'function' ? scheduleRe
 window.Sshterm = window.Sshterm || {};
 var Sshterm = window.Sshterm;
 
-// ---------- SSH 隧道列表渲染 ----------
+var TUNNEL_TYPE_HELP = {
+  local: {
+    help: '把本机端口转到 SSH 对面那台机器上的服务。例如本机 18080 → 远端 127.0.0.1:80，浏览器访问 http://127.0.0.1:18080 即可。',
+    localLabel: '本机监听端口',
+    localPh: '18080',
+    remoteLabel: '远端目标 (主机:端口)',
+    remotePh: '127.0.0.1:80',
+    showRemote: true,
+    example: (local, remote) => `本机访问：http://127.0.0.1:${local || '18080'} → 远端 ${remote || '127.0.0.1:80'}`,
+  },
+  remote: {
+    help: '让远端机器开一个端口，连过去的流量会转到你这台电脑。常用于给内网服务暴露回跳。',
+    localLabel: '本机目标端口',
+    localPh: '3389',
+    remoteLabel: '远端监听端口',
+    remotePh: '13389',
+    showRemote: true,
+    remoteIsPort: true,
+    example: (local, remote) => `远端 127.0.0.1:${remote || '13389'} → 本机 127.0.0.1:${local || '3389'}`,
+  },
+  dynamic: {
+    help: '在本机开一个 SOCKS5 代理。浏览器或软件把代理指到 127.0.0.1:该端口，流量经 SSH 出去。',
+    localLabel: '本机 SOCKS 端口',
+    localPh: '1080',
+    remoteLabel: '远端目标',
+    remotePh: '',
+    showRemote: false,
+    example: (local) => `SOCKS5 代理：127.0.0.1:${local || '1080'}（仅本机可用）`,
+  },
+};
+
+function formatBytes(n) {
+  const v = Number(n) || 0;
+  if (v < 1024) return v + 'B';
+  if (v < 1024 * 1024) return (v / 1024).toFixed(1) + 'KB';
+  return (v / (1024 * 1024)).toFixed(1) + 'MB';
+}
+
+function tunnelRouteText(t) {
+  if (t.type === 'dynamic') return `SOCKS5  127.0.0.1:${t.localPort}`;
+  if (t.type === 'remote') return `远端 :${t.remotePort}  →  本机 127.0.0.1:${t.localPort}`;
+  return `本机 :${t.localPort}  →  ${t.remoteHost}:${t.remotePort}`;
+}
+
+function tunnelTypeLabel(type) {
+  return ({ local: '本地转发', remote: '远端转发', dynamic: 'SOCKS5' })[type] || type;
+}
+
 function renderTunnelList(m) {
   const el = $('tunnel-list');
-  const tabs = m.tunnels || [];
-  if (tabs.length === 0) {
-    el.innerHTML = '<div class="muted" style="padding:12px">暂无隧道</div>';
+  if (!el) return;
+  const list = m.tunnels || [];
+  if (list.length === 0) {
+    el.innerHTML = '<div class="tunnel-empty">还没有隧道。<br>在右侧选一种转发方式后点「创建隧道」。</div>';
     return;
   }
-  el.innerHTML = tabs.map(t => {
-    const typeMap = { local: '本地转发', remote: '远端转发', dynamic: '动态转发(SOCKS5)' };
-    const typeLabel = typeMap[t.type] || t.type;
+  el.innerHTML = list.map((t) => {
+    const err = t.lastError ? `<div class="tunnel-err">错误：${esc(t.lastError)}</div>` : '';
+    const openHint = t.type === 'local'
+      ? `http://127.0.0.1:${t.localPort}`
+      : (t.type === 'dynamic' ? `socks5://127.0.0.1:${t.localPort}` : '');
     return `
-      <div class="tunnel-item" style="padding:8px; border:1px solid #3a3b4d; margin-bottom:6px; border-radius:4px; background:#1a1b26;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <strong>${typeLabel}</strong><br>
-            <span class="muted">本地:${t.localPort} → ${t.remoteHost}:${t.remotePort}<br>状态:${t.state || 'active'} · 连接:${t.connections || 0} · RX:${t.rxBytes || 0}B · TX:${t.txBytes || 0}B${t.lastError ? `<br>错误:${esc(t.lastError)}` : ''}</span>
+      <div class="tunnel-item" data-id="${t.id}">
+        <div class="tunnel-item-main">
+          <div class="tunnel-item-title">
+            <span class="tunnel-badge">${tunnelTypeLabel(t.type)}</span>
+            <span class="tunnel-state ${t.state === 'active' ? 'ok' : ''}">${esc(t.state || 'active')}</span>
           </div>
-          <button class="mini danger tunnel-del" data-id="${t.id}" title="删除">🗑</button>
+          <div class="tunnel-route">${esc(tunnelRouteText(t))}</div>
+          <div class="tunnel-meta muted">连接 ${t.connections || 0} · RX ${formatBytes(t.rxBytes)} · TX ${formatBytes(t.txBytes)}</div>
+          ${err}
+        </div>
+        <div class="tunnel-item-actions">
+          ${openHint ? `<button type="button" class="mini tunnel-copy" data-copy="${esc(openHint)}" title="复制访问地址">复制</button>` : ''}
+          <button type="button" class="mini danger tunnel-del" data-id="${t.id}" title="删除">删除</button>
         </div>
       </div>
     `;
   }).join('');
-  // 绑定删除按钮事件
-  el.querySelectorAll('.tunnel-del').forEach(btn => {
+  el.querySelectorAll('.tunnel-del').forEach((btn) => {
     btn.onclick = (e) => {
       e.stopPropagation();
-      const id = parseInt(btn.dataset.id, 10);
-      send({ type: 'tunnel', id: tunnelTab.id, action: 'remove', tunnelId: id });
+      if (!tunnelTab) return;
+      send({ type: 'tunnel', id: tunnelTab.id, action: 'remove', tunnelId: Number(btn.dataset.id) });
+    };
+  });
+  el.querySelectorAll('.tunnel-copy').forEach((btn) => {
+    btn.onclick = async (e) => {
+      e.stopPropagation();
+      const text = btn.getAttribute('data-copy') || '';
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text);
+        else {
+          const ta = document.createElement('textarea');
+          ta.value = text; document.body.appendChild(ta); ta.select();
+          document.execCommand('copy'); ta.remove();
+        }
+        if (typeof setStatus === 'function') setStatus('已复制 ' + text);
+      } catch {
+        if (typeof setStatus === 'function') setStatus('复制失败');
+      }
     };
   });
 }
 
-// 保存当前激活的 SSH 标签 (隧道面板使用)
+function syncTunnelFormUi() {
+  const type = ($('tn-type') && $('tn-type').value) || 'local';
+  const spec = TUNNEL_TYPE_HELP[type] || TUNNEL_TYPE_HELP.local;
+  document.querySelectorAll('.tunnel-type-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.getAttribute('data-tn-type') === type);
+  });
+  if ($('tn-type-help')) $('tn-type-help').textContent = spec.help;
+  if ($('tn-local-label')) $('tn-local-label').textContent = spec.localLabel;
+  if ($('tn-remote-label')) $('tn-remote-label').textContent = spec.remoteLabel;
+  const local = $('tn-local');
+  const remote = $('tn-remote');
+  const remoteWrap = $('tn-remote-wrap');
+  if (local) {
+    local.placeholder = spec.localPh;
+    if (!local.value) local.value = spec.localPh;
+  }
+  if (remoteWrap) remoteWrap.classList.toggle('hidden', !spec.showRemote);
+  if (remote) {
+    remote.placeholder = spec.remotePh;
+    if (spec.remoteIsPort) {
+      remote.type = 'number';
+      remote.min = '1';
+      remote.max = '65535';
+      if (!remote.value || remote.value.includes(':')) remote.value = spec.remotePh;
+    } else {
+      remote.type = 'text';
+      remote.removeAttribute('min');
+      remote.removeAttribute('max');
+      if (!remote.value || /^\d+$/.test(remote.value)) remote.value = spec.remotePh;
+    }
+  }
+  updateTunnelExample();
+}
+
+function updateTunnelExample() {
+  const type = ($('tn-type') && $('tn-type').value) || 'local';
+  const spec = TUNNEL_TYPE_HELP[type] || TUNNEL_TYPE_HELP.local;
+  const el = $('tn-example');
+  if (!el) return;
+  el.textContent = spec.example(
+    ($('tn-local') && $('tn-local').value) || '',
+    ($('tn-remote') && $('tn-remote').value) || ''
+  );
+}
+
+function collectTunnelForm() {
+  const type = ($('tn-type') && $('tn-type').value) || 'local';
+  const localPort = Number(($('tn-local') && $('tn-local').value) || 0);
+  if (!Number.isInteger(localPort) || localPort < 1 || localPort > 65535) {
+    return { error: type === 'dynamic' ? '请填写有效的本机 SOCKS 端口 (1–65535)' : '请填写有效的本机端口 (1–65535)' };
+  }
+  if (type === 'dynamic') {
+    return { tunnelType: 'dynamic', localPort, remoteHost: 'SOCKS5', remotePort: 0 };
+  }
+  if (type === 'remote') {
+    const remotePort = Number(($('tn-remote') && $('tn-remote').value) || 0);
+    if (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65535) {
+      return { error: '请填写有效的远端监听端口 (1–65535)' };
+    }
+    // API: localPort = 本机目标, remotePort = 远端监听
+    return { tunnelType: 'remote', localPort, remoteHost: '127.0.0.1', remotePort };
+  }
+  const raw = String(($('tn-remote') && $('tn-remote').value) || '').trim();
+  if (!raw) return { error: '请填写远端目标，例如 127.0.0.1:80' };
+  const splitAt = raw.lastIndexOf(':');
+  if (splitAt <= 0) return { error: '远端目标格式应为 主机:端口，例如 127.0.0.1:80' };
+  const host = raw.slice(0, splitAt).trim();
+  const remotePort = Number(raw.slice(splitAt + 1));
+  if (!host) return { error: '远端主机不能为空' };
+  if (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65535) {
+    return { error: '远端端口无效' };
+  }
+  return { tunnelType: 'local', localPort, remoteHost: host, remotePort };
+}
+
+function bindTunnelFormChrome() {
+  const tabs = document.querySelector('.tunnel-type-tabs');
+  if (tabs && !tabs.dataset.bound) {
+    tabs.dataset.bound = '1';
+    tabs.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-tn-type]');
+      if (!btn || !$('tn-type')) return;
+      $('tn-type').value = btn.getAttribute('data-tn-type');
+      // Clear sticky values so placeholders for the new mode take effect.
+      if ($('tn-local')) $('tn-local').value = '';
+      if ($('tn-remote')) $('tn-remote').value = '';
+      syncTunnelFormUi();
+    });
+  }
+  ['tn-local', 'tn-remote'].forEach((id) => {
+    const el = $(id);
+    if (el && !el.dataset.exampleBound) {
+      el.dataset.exampleBound = '1';
+      el.addEventListener('input', updateTunnelExample);
+    }
+  });
+}
+
 var tunnelTab = null;
 var tunnelRefreshTimer = null;
 function openTunnelPanel(tab) {
   tunnelTab = tab;
+  bindTunnelFormChrome();
+  syncTunnelFormUi();
+  const hint = $('tunnel-session-hint');
+  if (hint) {
+    const name = (tab.cfg && (tab.cfg.name || tab.cfg.host)) || tab.id;
+    hint.textContent = `当前会话：${name}${tab.cfg && tab.cfg.host ? ` (${tab.cfg.host})` : ''}`;
+  }
+  const list = $('tunnel-list');
+  if (list) list.innerHTML = '<div class="tunnel-empty muted">加载中…</div>';
   $('dlg-tunnel-mask').classList.remove('hidden');
   send({ type: 'tunnel', id: tab.id, action: 'list' });
   clearInterval(tunnelRefreshTimer);
-  tunnelRefreshTimer = setInterval(() => { if (tunnelTab && !$('dlg-tunnel-mask').classList.contains('hidden')) send({ type: 'tunnel', id: tunnelTab.id, action: 'list' }); }, 2000);
+  tunnelRefreshTimer = setInterval(() => {
+    if (tunnelTab && !$('dlg-tunnel-mask').classList.contains('hidden')) {
+      send({ type: 'tunnel', id: tunnelTab.id, action: 'list' });
+    }
+  }, 2000);
 }
 
+function closeTunnelPanel() {
+  const mask = $('dlg-tunnel-mask');
+  if (mask) mask.classList.add('hidden');
+  clearInterval(tunnelRefreshTimer);
+  tunnelRefreshTimer = null;
+}
 
-Sshterm.renderTunnelList = typeof renderTunnelList === 'function' ? renderTunnelList : Sshterm.renderTunnelList;
-Sshterm.openTunnelPanel = typeof openTunnelPanel === 'function' ? openTunnelPanel : Sshterm.openTunnelPanel;
+Sshterm.renderTunnelList = renderTunnelList;
+Sshterm.openTunnelPanel = openTunnelPanel;
+Sshterm.closeTunnelPanel = closeTunnelPanel;
+Sshterm.collectTunnelForm = collectTunnelForm;
+Sshterm.syncTunnelFormUi = syncTunnelFormUi;
+Sshterm.TUNNEL_TYPE_HELP = TUNNEL_TYPE_HELP;
 
 // ========== web/js/sftp-panel.js ==========
 // sshterm web module: sftp-panel — SFTP 面板 UI / 列表 / 工具栏
@@ -2642,19 +2954,19 @@ var Sshterm = window.Sshterm;
 var HOTKEY_STORAGE_KEY = 'sshterm.hotkeys';
 
 var DEFAULT_HOTKEYS = {
-  newConnection: { ctrl: true, shift: false, alt: false, key: 'n', labelZh: '新建连接', labelEn: 'New connection' },
-  openSettings: { ctrl: true, shift: false, alt: false, key: ',', labelZh: '打开设置', labelEn: 'Open settings' },
-  terminalSearch: { ctrl: true, shift: false, alt: false, key: 'f', labelZh: '终端搜索', labelEn: 'Terminal search' },
-  manualReconnect: { ctrl: true, shift: false, alt: false, key: 'r', labelZh: '手动重连', labelEn: 'Manual reconnect' },
-  fontIncrease: { ctrl: true, shift: false, alt: false, key: '=', labelZh: '增大字号', labelEn: 'Increase font' },
-  fontDecrease: { ctrl: true, shift: false, alt: false, key: '-', labelZh: '减小字号', labelEn: 'Decrease font' },
-  nextTab: { ctrl: true, shift: false, alt: false, key: 'tab', labelZh: '下一标签', labelEn: 'Next tab' },
-  prevTab: { ctrl: true, shift: true, alt: false, key: 'tab', labelZh: '上一标签', labelEn: 'Previous tab' },
+  newConnection: { ctrl: true, shift: false, alt: false, key: 'n', labelZh: '新建连接', labelEn: 'New connection', hintZh: '打开新建连接窗口', hintEn: 'Open the new-connection dialog' },
+  openSettings: { ctrl: true, shift: false, alt: false, key: ',', labelZh: '打开设置', labelEn: 'Open settings', hintZh: '打开这个设置窗口', hintEn: 'Open this settings window' },
+  terminalSearch: { ctrl: true, shift: false, alt: false, key: 'f', labelZh: '终端搜索', labelEn: 'Terminal search', hintZh: '在当前终端输出里查找文字', hintEn: 'Find text in the current terminal' },
+  manualReconnect: { ctrl: true, shift: false, alt: false, key: 'r', labelZh: '手动重连', labelEn: 'Manual reconnect', hintZh: '重新连接当前会话', hintEn: 'Reconnect the current session' },
+  fontIncrease: { ctrl: true, shift: false, alt: false, key: '=', labelZh: '增大字号', labelEn: 'Increase font', hintZh: '当前终端字号加大一号', hintEn: 'Make the current terminal font larger' },
+  fontDecrease: { ctrl: true, shift: false, alt: false, key: '-', labelZh: '减小字号', labelEn: 'Decrease font', hintZh: '当前终端字号减小一号', hintEn: 'Make the current terminal font smaller' },
+  nextTab: { ctrl: true, shift: false, alt: false, key: 'tab', labelZh: '下一标签', labelEn: 'Next tab', hintZh: '切到右边一个标签', hintEn: 'Switch to the next tab' },
+  prevTab: { ctrl: true, shift: true, alt: false, key: 'tab', labelZh: '上一标签', labelEn: 'Previous tab', hintZh: '切到左边一个标签', hintEn: 'Switch to the previous tab' },
 };
 
 function cloneHotkey(entry) {
   return { ctrl: !!entry.ctrl, shift: !!entry.shift, alt: !!entry.alt, key: String(entry.key || '').toLowerCase(),
-    labelZh: entry.labelZh, labelEn: entry.labelEn };
+    labelZh: entry.labelZh, labelEn: entry.labelEn, hintZh: entry.hintZh, hintEn: entry.hintEn };
 }
 
 function loadHotkeys() {
@@ -2666,6 +2978,8 @@ function loadHotkeys() {
     map[action] = cloneHotkey(Object.assign({}, def, override || {}));
     map[action].labelZh = def.labelZh;
     map[action].labelEn = def.labelEn;
+    map[action].hintZh = def.hintZh;
+    map[action].hintEn = def.hintEn;
   }
   return map;
 }
@@ -2721,20 +3035,34 @@ function fillHotkeyEditor(root) {
   const lang = (typeof LANG !== 'undefined' && LANG) || 'zh';
   el.innerHTML = '';
   for (const [action, entry] of Object.entries(map)) {
-    const label = document.createElement('label');
-    label.textContent = lang === 'en' ? (entry.labelEn || action) : (entry.labelZh || action);
+    const row = document.createElement('div');
+    row.className = 'hotkey-row';
+    const copy = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'hotkey-name';
+    name.textContent = lang === 'en' ? (entry.labelEn || action) : (entry.labelZh || action);
+    const hint = document.createElement('div');
+    hint.className = 'hotkey-hint';
+    hint.textContent = lang === 'en' ? (entry.hintEn || '') : (entry.hintZh || '');
+    copy.appendChild(name);
+    copy.appendChild(hint);
     const input = document.createElement('input');
     input.type = 'text';
     input.readOnly = true;
     input.dataset.action = action;
     input.value = formatHotkey(entry);
     input.title = '点击后按下新快捷键';
+    input.placeholder = '按下新组合…';
+    input.addEventListener('focus', () => {
+      input.classList.add('capturing');
+      input.placeholder = '按下新组合…';
+    });
+    input.addEventListener('blur', () => input.classList.remove('capturing'));
     input.addEventListener('keydown', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       if (ev.key === 'Escape') { input.blur(); return; }
       if (ev.key === 'Backspace' || ev.key === 'Delete') {
-        // reset to default
         const def = DEFAULT_HOTKEYS[action];
         map[action] = cloneHotkey(def);
         input.value = formatHotkey(map[action]);
@@ -2750,12 +3078,27 @@ function fillHotkeyEditor(root) {
         key,
         labelZh: entry.labelZh,
         labelEn: entry.labelEn,
+        hintZh: entry.hintZh,
+        hintEn: entry.hintEn,
       };
+      input.value = formatHotkey(map[action]);
+      input.classList.remove('capturing');
+      saveHotkeys(map);
+    });
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'mini';
+    reset.textContent = lang === 'en' ? 'Reset' : '还原';
+    reset.title = lang === 'en' ? 'Restore default shortcut' : '恢复这项默认快捷键';
+    reset.addEventListener('click', () => {
+      map[action] = cloneHotkey(DEFAULT_HOTKEYS[action]);
       input.value = formatHotkey(map[action]);
       saveHotkeys(map);
     });
-    el.appendChild(label);
-    el.appendChild(input);
+    row.appendChild(copy);
+    row.appendChild(input);
+    row.appendChild(reset);
+    el.appendChild(row);
   }
 }
 
@@ -4256,6 +4599,14 @@ function handleMsg(m) {
     case 'tunnel': {
       if (m.id !== (tunnelTab && tunnelTab.id)) break;
       if (m.action === 'list' || m.action === 'add' || m.action === 'remove') renderTunnelList(m);
+      if (m.action === 'add' && m.tunnel) {
+        const t = m.tunnel;
+        if (t.type === 'dynamic') setStatus(`SOCKS5 已就绪：127.0.0.1:${t.localPort}`);
+        else if (t.type === 'remote') setStatus(`远端转发已启用：远端 :${t.remotePort} → 本机 :${t.localPort}`);
+        else setStatus(`本地转发已启用：本机 :${t.localPort} → ${t.remoteHost}:${t.remotePort}`);
+      } else if (m.action === 'remove' && m.ok) {
+        setStatus('隧道已删除');
+      }
       break;
     }
     case 'tunnel-alert': { if (m.id === activeTabId) setStatus(`⚠ ${m.msg}`); break; }
@@ -5754,11 +6105,21 @@ updateSftpSelectUi();
   if (btn) btn.onclick = () => openSettingsDialog();
   const closeBtn = $('settings-close');
   if (closeBtn) closeBtn.onclick = () => closeSettingsDialog();
+  const closeBtn2 = $('settings-close-secondary');
+  if (closeBtn2) closeBtn2.onclick = () => closeSettingsDialog();
   const applyBtn = $('btn-settings-apply');
   if (applyBtn) applyBtn.onclick = () => applySettingsFromDialog();
   const resetBtn = $('btn-settings-reset');
   if (resetBtn) resetBtn.onclick = () => {
     fillSettingsForm(saveTerminalSettings({ ...DEFAULT_TERMINAL_SETTINGS }));
+    if (typeof saveHotkeys === 'function' && typeof DEFAULT_HOTKEYS === 'object') {
+      const restored = {};
+      for (const [action, def] of Object.entries(DEFAULT_HOTKEYS)) restored[action] = { ...def };
+      saveHotkeys(restored);
+      if (typeof fillHotkeyEditor === 'function') fillHotkeyEditor();
+    }
+    if (typeof applySettingsToAllTerminals === 'function') applySettingsToAllTerminals();
+    if (typeof setStatus === 'function') setStatus('已恢复默认外观和快捷键');
   };
 })();
 
@@ -5767,22 +6128,21 @@ $('btn-tunnel').onclick = () => {
   if (!tab || tab.cfg.type !== 'ssh') return setStatus('隧道仅适用于 SSH 会话');
   openTunnelPanel(tab);
 };
-$('tunnel-close').onclick = () => { $('dlg-tunnel-mask').classList.add('hidden'); clearInterval(tunnelRefreshTimer); tunnelRefreshTimer = null; };
+$('tunnel-close').onclick = () => closeTunnelPanel();
 $('btn-tunnel-refresh').onclick = () => {
   const tab = tunnelTab;
   if (tab) send({ type: 'tunnel', id: tab.id, action: 'list' });
 };
 $('btn-tunnel-add').onclick = () => {
   const tab = tunnelTab; if (!tab) return;
-  const type = $('tn-type').value;
-  const localPort = Number($('tn-local').value);
-  const remoteHost = $('tn-remote').value.trim();
-  if (!localPort || (type !== 'dynamic' && !remoteHost)) return setStatus(type === 'dynamic' ? '请填写本地 SOCKS 端口' : '请填写端口和远端目标');
-  const splitAt = remoteHost.lastIndexOf(':');
-  const host = splitAt > 0 ? remoteHost.slice(0, splitAt) : remoteHost;
-  const remotePort = splitAt > 0 ? Number(remoteHost.slice(splitAt + 1)) : 80;
-  send({ type: 'tunnel', id: tab.id, action: 'add', tunnelType: type, localPort,
-    remoteHost: type === 'dynamic' ? 'SOCKS5' : host, remotePort: type === 'dynamic' ? 0 : remotePort });
+  const form = collectTunnelForm();
+  if (form.error) return setStatus(form.error);
+  setStatus('正在创建隧道…');
+  send({
+    type: 'tunnel', id: tab.id, action: 'add',
+    tunnelType: form.tunnelType, localPort: form.localPort,
+    remoteHost: form.remoteHost, remotePort: form.remotePort,
+  });
 };
 $('btn-workspace').onclick = openWorkspacePanel;
 $('workspace-close').onclick = () => $('dlg-workspace-mask').classList.add('hidden');

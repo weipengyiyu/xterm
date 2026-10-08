@@ -6,19 +6,19 @@ var Sshterm = window.Sshterm;
 var HOTKEY_STORAGE_KEY = 'sshterm.hotkeys';
 
 var DEFAULT_HOTKEYS = {
-  newConnection: { ctrl: true, shift: false, alt: false, key: 'n', labelZh: '新建连接', labelEn: 'New connection' },
-  openSettings: { ctrl: true, shift: false, alt: false, key: ',', labelZh: '打开设置', labelEn: 'Open settings' },
-  terminalSearch: { ctrl: true, shift: false, alt: false, key: 'f', labelZh: '终端搜索', labelEn: 'Terminal search' },
-  manualReconnect: { ctrl: true, shift: false, alt: false, key: 'r', labelZh: '手动重连', labelEn: 'Manual reconnect' },
-  fontIncrease: { ctrl: true, shift: false, alt: false, key: '=', labelZh: '增大字号', labelEn: 'Increase font' },
-  fontDecrease: { ctrl: true, shift: false, alt: false, key: '-', labelZh: '减小字号', labelEn: 'Decrease font' },
-  nextTab: { ctrl: true, shift: false, alt: false, key: 'tab', labelZh: '下一标签', labelEn: 'Next tab' },
-  prevTab: { ctrl: true, shift: true, alt: false, key: 'tab', labelZh: '上一标签', labelEn: 'Previous tab' },
+  newConnection: { ctrl: true, shift: false, alt: false, key: 'n', labelZh: '新建连接', labelEn: 'New connection', hintZh: '打开新建连接窗口', hintEn: 'Open the new-connection dialog' },
+  openSettings: { ctrl: true, shift: false, alt: false, key: ',', labelZh: '打开设置', labelEn: 'Open settings', hintZh: '打开这个设置窗口', hintEn: 'Open this settings window' },
+  terminalSearch: { ctrl: true, shift: false, alt: false, key: 'f', labelZh: '终端搜索', labelEn: 'Terminal search', hintZh: '在当前终端输出里查找文字', hintEn: 'Find text in the current terminal' },
+  manualReconnect: { ctrl: true, shift: false, alt: false, key: 'r', labelZh: '手动重连', labelEn: 'Manual reconnect', hintZh: '重新连接当前会话', hintEn: 'Reconnect the current session' },
+  fontIncrease: { ctrl: true, shift: false, alt: false, key: '=', labelZh: '增大字号', labelEn: 'Increase font', hintZh: '当前终端字号加大一号', hintEn: 'Make the current terminal font larger' },
+  fontDecrease: { ctrl: true, shift: false, alt: false, key: '-', labelZh: '减小字号', labelEn: 'Decrease font', hintZh: '当前终端字号减小一号', hintEn: 'Make the current terminal font smaller' },
+  nextTab: { ctrl: true, shift: false, alt: false, key: 'tab', labelZh: '下一标签', labelEn: 'Next tab', hintZh: '切到右边一个标签', hintEn: 'Switch to the next tab' },
+  prevTab: { ctrl: true, shift: true, alt: false, key: 'tab', labelZh: '上一标签', labelEn: 'Previous tab', hintZh: '切到左边一个标签', hintEn: 'Switch to the previous tab' },
 };
 
 function cloneHotkey(entry) {
   return { ctrl: !!entry.ctrl, shift: !!entry.shift, alt: !!entry.alt, key: String(entry.key || '').toLowerCase(),
-    labelZh: entry.labelZh, labelEn: entry.labelEn };
+    labelZh: entry.labelZh, labelEn: entry.labelEn, hintZh: entry.hintZh, hintEn: entry.hintEn };
 }
 
 function loadHotkeys() {
@@ -30,6 +30,8 @@ function loadHotkeys() {
     map[action] = cloneHotkey(Object.assign({}, def, override || {}));
     map[action].labelZh = def.labelZh;
     map[action].labelEn = def.labelEn;
+    map[action].hintZh = def.hintZh;
+    map[action].hintEn = def.hintEn;
   }
   return map;
 }
@@ -85,20 +87,34 @@ function fillHotkeyEditor(root) {
   const lang = (typeof LANG !== 'undefined' && LANG) || 'zh';
   el.innerHTML = '';
   for (const [action, entry] of Object.entries(map)) {
-    const label = document.createElement('label');
-    label.textContent = lang === 'en' ? (entry.labelEn || action) : (entry.labelZh || action);
+    const row = document.createElement('div');
+    row.className = 'hotkey-row';
+    const copy = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'hotkey-name';
+    name.textContent = lang === 'en' ? (entry.labelEn || action) : (entry.labelZh || action);
+    const hint = document.createElement('div');
+    hint.className = 'hotkey-hint';
+    hint.textContent = lang === 'en' ? (entry.hintEn || '') : (entry.hintZh || '');
+    copy.appendChild(name);
+    copy.appendChild(hint);
     const input = document.createElement('input');
     input.type = 'text';
     input.readOnly = true;
     input.dataset.action = action;
     input.value = formatHotkey(entry);
     input.title = '点击后按下新快捷键';
+    input.placeholder = '按下新组合…';
+    input.addEventListener('focus', () => {
+      input.classList.add('capturing');
+      input.placeholder = '按下新组合…';
+    });
+    input.addEventListener('blur', () => input.classList.remove('capturing'));
     input.addEventListener('keydown', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       if (ev.key === 'Escape') { input.blur(); return; }
       if (ev.key === 'Backspace' || ev.key === 'Delete') {
-        // reset to default
         const def = DEFAULT_HOTKEYS[action];
         map[action] = cloneHotkey(def);
         input.value = formatHotkey(map[action]);
@@ -114,12 +130,27 @@ function fillHotkeyEditor(root) {
         key,
         labelZh: entry.labelZh,
         labelEn: entry.labelEn,
+        hintZh: entry.hintZh,
+        hintEn: entry.hintEn,
       };
+      input.value = formatHotkey(map[action]);
+      input.classList.remove('capturing');
+      saveHotkeys(map);
+    });
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'mini';
+    reset.textContent = lang === 'en' ? 'Reset' : '还原';
+    reset.title = lang === 'en' ? 'Restore default shortcut' : '恢复这项默认快捷键';
+    reset.addEventListener('click', () => {
+      map[action] = cloneHotkey(DEFAULT_HOTKEYS[action]);
       input.value = formatHotkey(map[action]);
       saveHotkeys(map);
     });
-    el.appendChild(label);
-    el.appendChild(input);
+    row.appendChild(copy);
+    row.appendChild(input);
+    row.appendChild(reset);
+    el.appendChild(row);
   }
 }
 

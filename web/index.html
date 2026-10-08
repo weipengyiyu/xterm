@@ -376,28 +376,50 @@
   </div>
 </div>
 
-<!-- SSH 隧道管理抽屉 -->
+<!-- SSH 隧道管理 -->
 <div id="dlg-tunnel-mask" class="hidden">
-  <div id="dlg-tunnel">
-    <h3>🔗 SSH 隧道 <button id="tunnel-close" class="mini" style="float:right">✕</button></h3>
-    <p class="muted" style="margin-bottom:8px">为当前 SSH 会话创建端口转发/跳板隧道</p>
-    <div id="tunnel-list" style="margin-bottom:10px"></div>
-    <div class="form">
-      <label>类型
-        <select id="tn-type">
-          <option value="local">本地转发 Local (本地端口 → 远端:端口)</option>
-          <option value="remote">远端转发 Remote (远端端口 → 本地:端口)</option>
-          <option value="dynamic">动态转发 Dynamic (SOCKS5 代理)</option>
-        </select>
-      </label>
-      <label>本地监听端口 <input id="tn-local" placeholder="1080" style="width:120px"></label>
-      <label>远端目标 <input id="tn-remote" placeholder="127.0.0.1:80" style="width:220px"></label>
-      <div class="dlg-actions">
-        <button id="btn-tunnel-add" class="primary">新建隧道</button>
-        <button id="btn-tunnel-refresh">刷新</button>
+  <div id="dlg-tunnel" role="dialog" aria-labelledby="tunnel-title">
+    <header class="tunnel-head">
+      <div>
+        <h3 id="tunnel-title">SSH 隧道</h3>
+        <p id="tunnel-session-hint" class="tunnel-session-hint muted">当前会话</p>
       </div>
+      <button type="button" id="tunnel-close" class="mini" title="关闭">✕</button>
+    </header>
+    <div class="tunnel-body">
+      <section class="tunnel-panel">
+        <div class="tunnel-panel-head">
+          <h4>已启用</h4>
+          <button type="button" id="btn-tunnel-refresh" class="mini">刷新</button>
+        </div>
+        <div id="tunnel-list" class="tunnel-list"></div>
+      </section>
+      <section class="tunnel-panel tunnel-create">
+        <h4>新建转发</h4>
+        <p id="tn-type-help" class="tunnel-help">把本机端口转到 SSH 对面那台机器上的服务。例如本机 18080 → 远端 127.0.0.1:80，浏览器访问 http://127.0.0.1:18080 即可。</p>
+        <div class="tunnel-type-tabs" role="tablist" aria-label="隧道类型">
+          <button type="button" class="tunnel-type-btn active" data-tn-type="local">本地转发</button>
+          <button type="button" class="tunnel-type-btn" data-tn-type="remote">远端转发</button>
+          <button type="button" class="tunnel-type-btn" data-tn-type="dynamic">SOCKS5</button>
+        </div>
+        <input type="hidden" id="tn-type" value="local">
+        <div class="tunnel-fields">
+          <label id="tn-local-wrap">
+            <span id="tn-local-label">本机监听端口</span>
+            <input id="tn-local" type="number" min="1" max="65535" placeholder="18080">
+          </label>
+          <label id="tn-remote-wrap">
+            <span id="tn-remote-label">远端目标</span>
+            <input id="tn-remote" type="text" placeholder="127.0.0.1:80" autocomplete="off" spellcheck="false">
+          </label>
+        </div>
+        <p id="tn-example" class="tunnel-example muted">本机访问：http://127.0.0.1:18080 → 远端 127.0.0.1:80</p>
+        <div class="tunnel-create-actions">
+          <button type="button" id="btn-tunnel-add" class="primary">创建隧道</button>
+        </div>
+        <p class="tunnel-foot muted">单会话最多 8 条；只监听 127.0.0.1，不对外网开放。端口已被占用时会提示失败。</p>
+      </section>
     </div>
-    <p class="muted cmd-foot">单会话最多 8 条隧道;端口冲突时会提示失败</p>
   </div>
 </div>
 
@@ -474,32 +496,88 @@
 
 
 <div id="dlg-settings-mask" class="hidden">
-  <div id="dlg-settings" class="dlg" style="min-width:420px">
-    <h3>终端外观设置</h3>
-    <p class="muted" style="font-size:12px;margin-top:0">字体、主题与滚动回退保存在本机浏览器 (localStorage)，对新旧终端立即生效。</p>
-    <label>配色主题
-      <select id="set-theme"></select>
-    </label>
-    <label>字体家族
-      <input id="set-font-family" type="text" placeholder='Consolas, "Courier New", monospace' style="width:100%">
-    </label>
-    <label>字号 (px)
-      <input id="set-font-size" type="number" min="10" max="32" step="1" style="width:100px">
-    </label>
-    <label>滚动回退行数
-      <input id="set-scrollback" type="number" min="500" max="100000" step="500" style="width:120px">
-    </label>
-    <label style="display:flex;align-items:center;gap:8px">
-      <input id="set-cursor-blink" type="checkbox"> 光标闪烁
-    </label>
-    <h4 style="margin:12px 0 6px">快捷键</h4>
-    <p class="muted" style="font-size:12px;margin:0 0 8px">自定义常用快捷键 (保存在本机 localStorage)。点击输入框后按下新组合键。</p>
-    <div id="hotkey-editor" class="hotkey-editor"></div>
-    <div class="dlg-actions">
-      <button id="btn-settings-apply" class="primary">应用</button>
-      <button id="btn-settings-reset">恢复默认</button>
-      <button id="settings-close">取消</button>
+  <div id="dlg-settings" role="dialog" aria-labelledby="settings-title">
+    <header class="settings-head">
+      <h3 id="settings-title">设置</h3>
+      <button type="button" id="settings-close" class="mini" title="关闭">✕</button>
+    </header>
+    <div class="settings-body">
+      <nav class="settings-nav" role="tablist" aria-label="设置分类">
+        <button type="button" class="settings-nav-btn active" data-settings-tab="appearance">外观</button>
+        <button type="button" class="settings-nav-btn" data-settings-tab="hotkeys">快捷键</button>
+      </nav>
+      <div class="settings-pages">
+        <section id="settings-page-appearance" class="settings-page" data-settings-page="appearance">
+          <p class="settings-lead">这里改终端长什么样。点右下角「应用」后立刻作用到已打开的标签，并保存在这台电脑的浏览器里。</p>
+          <div class="settings-row">
+            <div class="settings-copy">
+              <label for="set-theme">配色主题</label>
+              <p class="settings-hint">文字、背景和光标颜色。默认 Tokyo Night。</p>
+            </div>
+            <div class="settings-control">
+              <select id="set-theme"></select>
+              <div id="set-theme-preview" class="theme-preview" aria-hidden="true"></div>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-copy">
+              <label for="set-font-preset">字体</label>
+              <p class="settings-hint">选常见等宽字体；选「自定义」可手填 CSS 字体列表。</p>
+            </div>
+            <div class="settings-control">
+              <select id="set-font-preset"></select>
+              <input id="set-font-family" type="text" placeholder='Consolas, "Courier New", monospace'>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-copy">
+              <label for="set-font-size">字号</label>
+              <p class="settings-hint">终端文字大小，单位像素。也可在终端里用快捷键加减。</p>
+            </div>
+            <div class="settings-control settings-control-inline">
+              <input id="set-font-size" type="number" min="10" max="32" step="1">
+              <span class="settings-unit">px</span>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-copy">
+              <label for="set-scrollback">回滚行数</label>
+              <p class="settings-hint">向上滚动能看到多少历史输出。越大越占内存，一般 5000～20000 即可。</p>
+            </div>
+            <div class="settings-control settings-control-inline">
+              <input id="set-scrollback" type="number" min="500" max="100000" step="500">
+              <span class="settings-unit">行</span>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-copy">
+              <label for="set-cursor-blink">光标闪烁</label>
+              <p class="settings-hint">块状光标是否闪动，方便看清当前输入位置。</p>
+            </div>
+            <div class="settings-control">
+              <label class="settings-switch">
+                <input id="set-cursor-blink" type="checkbox">
+                <span>启用闪烁</span>
+              </label>
+            </div>
+          </div>
+        </section>
+        <section id="settings-page-hotkeys" class="settings-page hidden" data-settings-page="hotkeys">
+          <p class="settings-lead">点右侧组合键框，再按下新的按键。改完马上生效，不用点「应用」。按 Delete 或「还原」恢复该项默认。</p>
+          <div class="hotkey-head">
+            <span>功能</span>
+            <span>组合键</span>
+          </div>
+          <div id="hotkey-editor" class="hotkey-editor"></div>
+        </section>
+      </div>
     </div>
+    <footer class="settings-foot">
+      <button type="button" id="btn-settings-reset">恢复默认</button>
+      <span class="settings-foot-spacer"></span>
+      <button type="button" id="settings-close-secondary">取消</button>
+      <button type="button" id="btn-settings-apply" class="primary">应用</button>
+    </footer>
   </div>
 </div>
 

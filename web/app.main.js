@@ -975,6 +975,14 @@ function handleMsg(m) {
     case 'tunnel': {
       if (m.id !== (tunnelTab && tunnelTab.id)) break;
       if (m.action === 'list' || m.action === 'add' || m.action === 'remove') renderTunnelList(m);
+      if (m.action === 'add' && m.tunnel) {
+        const t = m.tunnel;
+        if (t.type === 'dynamic') setStatus(`SOCKS5 已就绪：127.0.0.1:${t.localPort}`);
+        else if (t.type === 'remote') setStatus(`远端转发已启用：远端 :${t.remotePort} → 本机 :${t.localPort}`);
+        else setStatus(`本地转发已启用：本机 :${t.localPort} → ${t.remoteHost}:${t.remotePort}`);
+      } else if (m.action === 'remove' && m.ok) {
+        setStatus('隧道已删除');
+      }
       break;
     }
     case 'tunnel-alert': { if (m.id === activeTabId) setStatus(`⚠ ${m.msg}`); break; }
@@ -2473,11 +2481,21 @@ updateSftpSelectUi();
   if (btn) btn.onclick = () => openSettingsDialog();
   const closeBtn = $('settings-close');
   if (closeBtn) closeBtn.onclick = () => closeSettingsDialog();
+  const closeBtn2 = $('settings-close-secondary');
+  if (closeBtn2) closeBtn2.onclick = () => closeSettingsDialog();
   const applyBtn = $('btn-settings-apply');
   if (applyBtn) applyBtn.onclick = () => applySettingsFromDialog();
   const resetBtn = $('btn-settings-reset');
   if (resetBtn) resetBtn.onclick = () => {
     fillSettingsForm(saveTerminalSettings({ ...DEFAULT_TERMINAL_SETTINGS }));
+    if (typeof saveHotkeys === 'function' && typeof DEFAULT_HOTKEYS === 'object') {
+      const restored = {};
+      for (const [action, def] of Object.entries(DEFAULT_HOTKEYS)) restored[action] = { ...def };
+      saveHotkeys(restored);
+      if (typeof fillHotkeyEditor === 'function') fillHotkeyEditor();
+    }
+    if (typeof applySettingsToAllTerminals === 'function') applySettingsToAllTerminals();
+    if (typeof setStatus === 'function') setStatus('已恢复默认外观和快捷键');
   };
 })();
 
@@ -2486,22 +2504,21 @@ $('btn-tunnel').onclick = () => {
   if (!tab || tab.cfg.type !== 'ssh') return setStatus('隧道仅适用于 SSH 会话');
   openTunnelPanel(tab);
 };
-$('tunnel-close').onclick = () => { $('dlg-tunnel-mask').classList.add('hidden'); clearInterval(tunnelRefreshTimer); tunnelRefreshTimer = null; };
+$('tunnel-close').onclick = () => closeTunnelPanel();
 $('btn-tunnel-refresh').onclick = () => {
   const tab = tunnelTab;
   if (tab) send({ type: 'tunnel', id: tab.id, action: 'list' });
 };
 $('btn-tunnel-add').onclick = () => {
   const tab = tunnelTab; if (!tab) return;
-  const type = $('tn-type').value;
-  const localPort = Number($('tn-local').value);
-  const remoteHost = $('tn-remote').value.trim();
-  if (!localPort || (type !== 'dynamic' && !remoteHost)) return setStatus(type === 'dynamic' ? '请填写本地 SOCKS 端口' : '请填写端口和远端目标');
-  const splitAt = remoteHost.lastIndexOf(':');
-  const host = splitAt > 0 ? remoteHost.slice(0, splitAt) : remoteHost;
-  const remotePort = splitAt > 0 ? Number(remoteHost.slice(splitAt + 1)) : 80;
-  send({ type: 'tunnel', id: tab.id, action: 'add', tunnelType: type, localPort,
-    remoteHost: type === 'dynamic' ? 'SOCKS5' : host, remotePort: type === 'dynamic' ? 0 : remotePort });
+  const form = collectTunnelForm();
+  if (form.error) return setStatus(form.error);
+  setStatus('正在创建隧道…');
+  send({
+    type: 'tunnel', id: tab.id, action: 'add',
+    tunnelType: form.tunnelType, localPort: form.localPort,
+    remoteHost: form.remoteHost, remotePort: form.remotePort,
+  });
 };
 $('btn-workspace').onclick = openWorkspacePanel;
 $('workspace-close').onclick = () => $('dlg-workspace-mask').classList.add('hidden');
