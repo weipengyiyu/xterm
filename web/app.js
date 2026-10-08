@@ -337,7 +337,7 @@ const DOM_TEXT_EN = {
   '快捷键': 'Hotkeys',
   '自定义常用快捷键 (保存在本机 localStorage)。点击输入框后按下新组合键。': 'Customize common shortcuts (saved in localStorage). Click a field and press a new combo.',
   '点击后按下新快捷键': 'Click then press a new shortcut',
-  'sshterm — SSH / Telnet / VNC / 串口': 'sshterm — SSH / Telnet / VNC / Serial',
+  'xterm — SSH / Telnet / VNC / 串口': 'xterm — SSH / Telnet / VNC / Serial',
   '＋ 新建连接': '＋ New Connection', '⌨ 本地': '⌨ Local', '💾 保存会话': '💾 Save Session', '📁 文件': '📁 Files',
   '🔗 隧道': '🔗 Tunnels', '⏹ 全部关闭': '⏹ Close All', '☰ 工具': '☰ Tools',
   '📋 操作日志': '📋 Operation Log', '🌐 切换语言': '🌐 Language', '⏱ 定时发送': '⏱ Timed Send',
