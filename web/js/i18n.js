@@ -243,7 +243,7 @@ const DOM_ATTR_EN = {
   '完成': 'Done', '有新输出': 'New output', '输出已停': 'Output stopped',
   '把键盘输入同步到所有已连接的终端标签和分屏': 'Mirror keyboard input to every connected terminal tab and split pane',
   '保存或恢复当前标签与分屏布局': 'Save or Restore Tabs and Split Layout',
-  '快捷命令(保存/执行/脚本)': 'Quick Commands', 'IP[:端口] 回车快速连接': 'IP[:port] — Enter to connect',
+  '快捷命令(保存/执行/脚本)': 'Quick Commands',
   '服务器连接状态': 'Server Connection Status', '批量管理': 'Batch Management', '解析 SSH config': 'Parse SSH Config',
   '拖动调整已保存会话宽度': 'Drag to Resize Saved Sessions',
   '搜索 (Enter=下一个, Shift+Enter=上一个, Esc=关闭)': 'Search (Enter=next, Shift+Enter=previous, Esc=close)',

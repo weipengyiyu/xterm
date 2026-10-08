@@ -399,21 +399,6 @@ $('sftp-dir-input').onchange = async (e) => {
   e.target.value = '';
 };
 $('btn-refresh').onclick = () => { send({ type: 'list' }); send({ type: 'serialports' }); };
-// 快速连接: 工具栏输入 IP[:端口], 回车直接连接
-$('quick-connect').onkeydown = (e) => {
-  if (e.key !== 'Enter') return;
-  const raw = $('quick-connect').value.trim();
-  if (!raw) return;
-  const m = raw.match(/^(.+?)(?::(\d+))?$/);
-  if (!m) return;
-  const host = m[1];
-  const port = parseInt(m[2], 10) || 22;
-  const type = port === 23 ? 'telnet' : 'ssh';
-  newTab({ type, name: `${host}:${port}`, host, port, reconnect: true });
-  $('quick-connect').value = '';
-  $('quick-connect').blur();
-  setStatus(`快速连接: ${host}:${port}`);
-};
 $('s-refresh').onclick = () => send({ type: 'serialports' });
 let serialDtr = false;
 let serialRts = false;

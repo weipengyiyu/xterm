@@ -81,13 +81,6 @@ button.mini { padding: 2px 8px; font-size: 11px; }
 .status-dot.idle { background: var(--muted); }
 .status-dot.ok { background: var(--ok); box-shadow: 0 0 0 3px rgba(94, 207, 154, 0.15); }
 .status-dot.err { background: var(--danger); }
-#quick-connect {
-  width: 180px; padding: 5px 10px;
-  background: var(--bg); color: var(--text);
-  border: 1px solid var(--border); border-radius: var(--radius);
-  font-size: 12px; font-family: var(--font-mono);
-}
-#quick-connect:focus { outline: none; border-color: var(--accent); }
 #conn-status-text { color: var(--text-dim); font-size: 12px; }
 #srv-addr { font-family: var(--font-mono); font-size: 11px; }
 
@@ -227,9 +220,29 @@ button.mini { padding: 2px 8px; font-size: 11px; }
 .welcome-brand::after {
   content: "";
   display: block;
-  width: 36px; height: 1px;
+  width: 92px;
+  height: 2px;
   margin: 18px auto 0;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(91, 159, 212, 0.25) 28%,
+    var(--accent) 46%,
+    #f4f8ff 50%,
+    var(--accent) 54%,
+    rgba(91, 159, 212, 0.25) 72%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  animation: welcomeLine 1.35s ease-in-out infinite;
+}
+@keyframes welcomeLine {
+  0% { background-position: 120% 0; }
+  100% { background-position: -20% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .welcome-brand::after { animation: none; }
 }
 .welcome-box button {
   display: block; margin: 0 auto;
