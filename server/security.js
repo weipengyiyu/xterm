@@ -26,7 +26,7 @@ function createSecurity({ port, clientToken }) {
   }
 
   function hasCliCapability(req) {
-    return req.headers['x-sshterm-token'] === clientToken;
+    return req.headers['x-xterm-token'] === clientToken;
   }
 
   function isTrustedOrigin(req) {

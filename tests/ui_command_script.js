@@ -1,6 +1,6 @@
 // UI regression for command-script execution primitives.
 const puppeteer = require('puppeteer-core');
-const EDGE = 'C:\\Users\\Administrator\\sshterm\\vendor\\chrome-headless-shell\\chrome-headless-shell.exe';
+const EDGE = 'C:\\Users\\Administrator\\xterm\\vendor\\chrome-headless-shell\\chrome-headless-shell.exe';
 const URL = process.argv[2] || 'http://127.0.0.1:8799/';
 (async () => {
   const browser = await puppeteer.launch({ executablePath: EDGE, headless: 'new' });

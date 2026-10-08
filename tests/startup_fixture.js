@@ -17,7 +17,7 @@ async function fixture(mode) {
       return res.end(JSON.stringify({ mode, mainRequests, upgrades }));
     }
     res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
-    if (url.pathname === '/bootstrap.js') return res.end('window.__SSHTERM_TOKEN="fixture";');
+    if (url.pathname === '/bootstrap.js') return res.end('window.__XTERM_TOKEN="fixture";');
     if (url.pathname === '/app.main.js') {
       mainRequests++;
       if (mode === 'always-fail' || (mode === 'fail-once' && mainRequests === 1)) {

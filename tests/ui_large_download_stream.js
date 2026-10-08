@@ -12,7 +12,7 @@ const ROOT = path.join(__dirname, '..');
 const EDGE = require('./browser_path')(ROOT);
 const PORT = 8906;
 const URL = `http://127.0.0.1:${PORT}/`;
-const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-large-download-'));
+const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-large-download-'));
 const profile = path.join(temp, 'profile');
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }

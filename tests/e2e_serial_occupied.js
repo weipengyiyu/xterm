@@ -14,7 +14,7 @@ const blocker = new SerialPort({ path: 'COM1', baudRate: 115200 }, (e) => {
 function runTest() {
   const ws = new WebSocket(WS_URL);
   ws.on('open', () => {
-    console.log('[2] sshterm 连接 COM1 (应报占用)...');
+    console.log('[2] xterm 连接 COM1 (应报占用)...');
     ws.send(JSON.stringify({ type: 'connect', id: 889, session: { type: 'serial', name: '占用验证', port: 'COM1', baudRate: 115200 } }));
   });
   ws.on('message', (d, isBinary) => {

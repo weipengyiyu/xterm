@@ -15,7 +15,7 @@ let serverOwned = false;
 let revealOnReady = false;
 
 app.setName('xterm');
-app.setPath('userData', path.join(app.getPath('home'), '.sshterm', 'desktop'));
+app.setPath('userData', path.join(app.getPath('home'), '.xterm', 'desktop'));
 Menu.setApplicationMenu(null);
 
 const gotLock = app.requestSingleInstanceLock();
@@ -41,7 +41,7 @@ function parsePort(argv) {
 }
 
 function findNode() {
-  if (process.env.SSHTERM_NODE && fs.existsSync(process.env.SSHTERM_NODE)) return process.env.SSHTERM_NODE;
+  if (process.env.XTERM_NODE && fs.existsSync(process.env.XTERM_NODE)) return process.env.XTERM_NODE;
   if (process.platform === 'win32') {
     const where = spawnSync('where.exe', ['node'], { encoding: 'utf8', windowsHide: true });
     if (where.status === 0) {
@@ -67,7 +67,7 @@ function runningInfo(url) {
       response.on('end', () => {
         try {
           const info = JSON.parse(body);
-          resolve(response.statusCode === 200 && info.app === 'sshterm' && Number.isInteger(info.pid) ? info : null);
+          resolve(response.statusCode === 200 && info.app === 'xterm' && Number.isInteger(info.pid) ? info : null);
         } catch { resolve(null); }
       });
     });
@@ -168,8 +168,8 @@ async function start() {
   try {
     url = await ensureServer(port);
   } catch (error) {
-    if (process.env.SSHTERM_PROOF) {
-      try { fs.writeFileSync(process.env.SSHTERM_PROOF, error.message || 'startup-failed'); } catch {}
+    if (process.env.XTERM_PROOF) {
+      try { fs.writeFileSync(process.env.XTERM_PROOF, error.message || 'startup-failed'); } catch {}
     } else {
       dialog.showErrorBox('xterm', error.message);
     }
@@ -184,8 +184,8 @@ async function start() {
     mainWindow.show();
     mainWindow.focus();
   }
-  if (process.env.SSHTERM_PROOF) {
-    try { fs.writeFileSync(process.env.SSHTERM_PROOF, status || 'not-connected'); } catch {}
+  if (process.env.XTERM_PROOF) {
+    try { fs.writeFileSync(process.env.XTERM_PROOF, status || 'not-connected'); } catch {}
     setTimeout(() => app.quit(), 400);
   }
 }

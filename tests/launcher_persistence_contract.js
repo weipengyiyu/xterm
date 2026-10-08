@@ -32,14 +32,14 @@ assert.match(shell, /"\$@"/,'shell must preserve argument boundaries');
 assert.match(vbs, /GetParentFolderName\(WScript\.ScriptFullName\)/);
 assert.match(vbs, /launch\.ps1/);
 for (const script of [launcher, powershell, batch, shell, vbs]) {
-  assert.doesNotMatch(script, /[A-Z]:\\(?:xterm|sshterm|tools)\b/i,
+  assert.doesNotMatch(script, /[A-Z]:\\(?:xterm|xterm|tools)\b/i,
     'launchers must not bind an installation directory');
   assert.doesNotMatch(script, /mklink|New-Item.*(?:HardLink|Junction|SymbolicLink)/i,
     'launchers must not create directory links');
 }
 
 assert.match(stopper, /http:\/\/127\.0\.0\.1:8787\/launcher-info/);
-assert.match(stopper, /""app""\\s\*:\\s\*""sshterm""/);
+assert.match(stopper, /""app""\\s\*:\\s\*""xterm""/);
 assert.match(stopper, /Win32_Process WHERE ProcessId = /);
 assert.doesNotMatch(stopper, /taskkill|\/IM\s+node\.exe|Name\s*=\s*['"]node\.exe/i);
 console.log('✅ launcher portability/session-persistence contract passed');

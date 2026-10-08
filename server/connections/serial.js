@@ -5,7 +5,7 @@ const BaseConnection = require('./base');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Windows COM10+ (and some USB-UART stacks even for COM1-9) need the
-// device namespace.  Other tools open `\\.\COMx`; without it sshterm can
+// device namespace.  Other tools open `\\.\COMx`; without it xterm can
 // fail while they succeed.
 function winSerialPath(port) {
   const raw = String(port || '').trim();
@@ -97,7 +97,7 @@ class SerialConnection extends BaseConnection {
           : err.message;
       this._emitError(`串口打开失败: ${msg}`, { occupied: busy });
       this.state = 'closed';
-      throw Object.assign(err, { sshtermOccupied: busy });
+      throw Object.assign(err, { xtermOccupied: busy });
     }
     if (generation !== this._openGeneration || this.state === 'closing' || this.state === 'closed') {
       try { if (sp.isOpen) sp.close(); } catch {}

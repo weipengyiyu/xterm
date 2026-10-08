@@ -175,21 +175,21 @@
     "id": "SERVICE_NULL",
     "evidence": {
       "exitCode": null,
-      "error": "┌──────────────────────────────────────────────┐\n│  sshterm  —  SSH / Telnet / VNC / 串口工具   │\n└──────────────────────────────────────────────┘\n  地址: http://127.0.0.1:7410\n  会话: C:\\Users\\Administrator\\AppData\\Local\\Temp\\sshterm-audit-Nlk9i6\\.sshterm\\sessions.json\n  日志: C:\\Users\\Administrator\\AppData\\Local\\Temp\\sshterm-audit-Nlk9i6\\.sshterm\\logs\\sshterm-20260907-155146.log\n"
+      "error": "┌──────────────────────────────────────────────┐\n│  xterm  —  SSH / Telnet / VNC / 串口工具   │\n└──────────────────────────────────────────────┘\n  地址: http://127.0.0.1:7410\n  会话: C:\\Users\\Administrator\\AppData\\Local\\Temp\\xterm-audit-Nlk9i6\\.xterm\\sessions.json\n  日志: C:\\Users\\Administrator\\AppData\\Local\\Temp\\xterm-audit-Nlk9i6\\.xterm\\logs\\xterm-20260907-155146.log\n"
     }
   },
   {
     "id": "SERVICE_OVERSIZE",
     "evidence": {
       "exitCode": null,
-      "error": "┌──────────────────────────────────────────────┐\n│  sshterm  —  SSH / Telnet / VNC / 串口工具   │\n└──────────────────────────────────────────────┘\n  地址: http://127.0.0.1:7416\n  会话: C:\\Users\\Administrator\\AppData\\Local\\Temp\\sshterm-audit-WZzLY7\\.sshterm\\sessions.json\n  日志: C:\\Users\\Administrator\\AppData\\Local\\Temp\\sshterm-audit-WZzLY7\\.sshterm\\logs\\sshterm-20260907-155149.log\n"
+      "error": "┌──────────────────────────────────────────────┐\n│  xterm  —  SSH / Telnet / VNC / 串口工具   │\n└──────────────────────────────────────────────┘\n  地址: http://127.0.0.1:7416\n  会话: C:\\Users\\Administrator\\AppData\\Local\\Temp\\xterm-audit-WZzLY7\\.xterm\\sessions.json\n  日志: C:\\Users\\Administrator\\AppData\\Local\\Temp\\xterm-audit-WZzLY7\\.xterm\\logs\\xterm-20260907-155149.log\n"
     }
   },
   {
     "id": "SERVICE_LOG-ERROR",
     "evidence": {
       "exitCode": null,
-      "error": "┌──────────────────────────────────────────────┐\n│  sshterm  —  SSH / Telnet / VNC / 串口工具   │\n└──────────────────────────────────────────────┘\n  地址: http://127.0.0.1:7423\n  会话: C:\\Users\\Administrator\\AppData\\Local\\Temp\\sshterm-audit-FNoVAb\\.sshterm\\sessions.json\n  日志: C:\\Users\\Administrator\\AppData\\Local\\Temp\\sshterm-audit-FNoVAb\\.sshterm\\logs\\sshterm-20260907-155151.log\n[conn] telnet 1 open\n"
+      "error": "┌──────────────────────────────────────────────┐\n│  xterm  —  SSH / Telnet / VNC / 串口工具   │\n└──────────────────────────────────────────────┘\n  地址: http://127.0.0.1:7423\n  会话: C:\\Users\\Administrator\\AppData\\Local\\Temp\\xterm-audit-FNoVAb\\.xterm\\sessions.json\n  日志: C:\\Users\\Administrator\\AppData\\Local\\Temp\\xterm-audit-FNoVAb\\.xterm\\logs\\xterm-20260907-155151.log\n[conn] telnet 1 open\n"
     }
   }
 ]

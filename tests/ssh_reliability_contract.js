@@ -107,13 +107,13 @@ function mockPipeable() {
   {
     const { parseRemoteMem } = SSHConnection._test;
     const sample = [
-      '__SSHTERM_STATS_START__',
+      '__XTERM_STATS_START__',
       'MEMINFO_START',
       'MemTotal:       67108864 kB',
       'MemAvailable:   33554432 kB',
       'MemFree:        16777216 kB',
       'MEMINFO_END',
-      '__SSHTERM_STATS_END__',
+      '__XTERM_STATS_END__',
     ].join('\n');
     const mem = parseRemoteMem(sample);
     assert.strictEqual(mem.memTotal, 67108864 * 1024);
@@ -133,8 +133,8 @@ function mockPipeable() {
     conn._emitData = () => {};
     conn.stream = { write: () => {}, on: () => {}, removeListener: () => {} };
     const token = 'abc123';
-    const start = `__SSHTERM_PWD_START_${token}__`;
-    const end = `__SSHTERM_PWD_END_${token}__`;
+    const start = `__XTERM_PWD_START_${token}__`;
+    const end = `__XTERM_PWD_END_${token}__`;
     conn._pwdCapture = {
       startRe: start.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
       endRe: end.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),

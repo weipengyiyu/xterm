@@ -10,9 +10,9 @@ const { spawn } = require('child_process');
 const { WebSocket } = require('ws');
 
 const ROOT = path.join(__dirname, '..');
-let port = Number(process.env.SSHTERM_TEST_PORT) || 0;
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-restart-'));
-const sessionDir = path.join(profile, '.sshterm');
+let port = Number(process.env.XTERM_TEST_PORT) || 0;
+const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-restart-'));
+const sessionDir = path.join(profile, '.xterm');
 const originalId = '11111111-1111-4111-8111-111111111111';
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
@@ -28,7 +28,7 @@ async function getToken(deadline = Date.now() + 10000) {
         res.on('data', chunk => { body += chunk; });
         res.on('end', () => res.statusCode === 200 ? resolve(body) : reject(new Error(`HTTP ${res.statusCode}`)));
       }).on('error', reject));
-      const match = script.match(/__SSHTERM_TOKEN\s*=\s*"([^"]+)"/);
+      const match = script.match(/__XTERM_TOKEN\s*=\s*"([^"]+)"/);
       if (match) return match[1];
     } catch {}
     await sleep(100);

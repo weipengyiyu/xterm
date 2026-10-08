@@ -21,8 +21,8 @@ function section(source, start, end) {
 function context(code, bindings = {}) { const c = vm.createContext({ Buffer, setTimeout, clearTimeout, TextEncoder, TextDecoder, Uint8Array, ArrayBuffer, ...bindings }); vm.runInContext(code, c); return c; }
 async function listen(s) { s.listen(0, '127.0.0.1'); await once(s, 'listening'); return s.address().port; }
 async function startService(badLog = false, extraEnv = {}) {
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-audit-'));
-  const dataDir = path.join(profile, '.sshterm'); fs.mkdirSync(dataDir);
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-audit-'));
+  const dataDir = path.join(profile, '.xterm'); fs.mkdirSync(dataDir);
   if (badLog) fs.writeFileSync(path.join(dataDir, 'session-logs'), 'deliberate mock I/O failure');
   const holder = net.createServer(); const port = await listen(holder); await new Promise(r => holder.close(r));
   const child = spawn(process.execPath, ['server/index.js', '--no-open', '--port', String(port)], {

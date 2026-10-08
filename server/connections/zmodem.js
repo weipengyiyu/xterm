@@ -37,7 +37,7 @@ class ZmodemReceiver {
   constructor(sendFn, onFile) {
     this.send = sendFn;          // 发送字节给远端
     this.onFile = onFile;        // 文件完成回调 (filename, data)
-    this.tmpDir = path.join(os.homedir(), '.sshterm', 'zmodem');
+    this.tmpDir = path.join(os.homedir(), '.xterm', 'zmodem');
     fs.mkdirSync(this.tmpDir, { recursive: true });
     this.reset();
   }

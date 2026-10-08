@@ -13,7 +13,7 @@ const PORT = 8919;
 const BASE = `http://127.0.0.1:${PORT}`;
 const FLOOD_BYTES = 4 * 1024 * 1024;
 const HOLD_BUDGET = 256 * 1024;
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-hold-'));
+const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-hold-'));
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 

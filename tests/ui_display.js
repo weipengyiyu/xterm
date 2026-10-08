@@ -11,9 +11,9 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 (async () => {
   // 自启源码模式 server
-  const prof = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-disp-'));
+  const prof = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-disp-'));
   const srv = spawn(process.execPath, ['server/index.js', '--port', '8894', '--no-open'], {
-    cwd: 'D:/sshterm', env: { ...process.env, HOME: prof, USERPROFILE: prof }, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: 'D:/xterm', env: { ...process.env, HOME: prof, USERPROFILE: prof }, stdio: ['ignore', 'pipe', 'pipe'],
   });
   await sleep(3000);
 
@@ -34,7 +34,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   console.log('[1] 建立 SSH 标签 (不发起真实连接)...');
   const created = await page.evaluate(() => {
     const tab = newTab({ type: 'ssh', name: 'display 验证', host: '127.0.0.1', port: 1,
-      user: 'sshterm', password: '', auth: 'password' }, { connect: false });
+      user: 'xterm', password: '', auth: 'password' }, { connect: false });
     return !!tab && !!tab.imageAddon;
   });
   console.log('    标签+图片插件:', created ? '✅' : '❌');
@@ -69,9 +69,9 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   await page.keyboard.press('i');
   await page.keyboard.up('Control');
   await sleep(300);
-  const promptShown = await page.evaluate(() => !!document.getElementById('sshterm-display-prompt'));
+  const promptShown = await page.evaluate(() => !!document.getElementById('xterm-display-prompt'));
   if (promptShown) {
-    await page.type('#sshterm-display-prompt input', '/tmp/k.png');
+    await page.type('#xterm-display-prompt input', '/tmp/k.png');
     await page.keyboard.press('Enter');
   }
   await sleep(800);

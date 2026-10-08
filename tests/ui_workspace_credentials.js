@@ -40,7 +40,7 @@ function waitForServer(deadline = Date.now() + 10000) {
         proxy: { type: 'socks5', host: 'proxy.invalid', port: 1080, username: 'proxy-user', password: 'DO_NOT_STORE_PROXY_PASSWORD' },
         jumpAuth: { username: 'jump-user', auth: 'password', password: 'DO_NOT_STORE_JUMP_PASSWORD' },
       }, { connect: false });
-      const raw = localStorage.getItem('sshterm.tabs') || '';
+      const raw = localStorage.getItem('xterm.tabs') || '';
       $('f-type').value = 'ssh';
       updateDlgFields();
       $('f-remember').checked = true;

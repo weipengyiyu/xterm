@@ -12,7 +12,7 @@ const { spawn } = require('child_process');
 const puppeteer = require('./puppeteer_test');
 const browserPath = require('./browser_path')();
 const root = path.resolve(__dirname, '..');
-const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-browser-startup-'));
+const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-browser-startup-'));
 const profile = path.join(sandbox, 'server-profile');
 const artifacts = path.join(root, '.tools', 'verification');
 const env = { ...process.env, USERPROFILE: profile, HOME: profile };
@@ -124,11 +124,11 @@ async function command(page, marker) {
     await page.waitForFunction(() => tabs.some(tab => tab.cfg.type === 'local' && tab.state === 'connected'), { timeout: 5000 });
     await command(page, 'XTERM_OFFLINE_START_OK');
     report.steps.push('Real CMD input/output passed');
-    const windowId = await page.evaluate(() => sessionStorage.getItem('sshterm.window.id'));
+    const windowId = await page.evaluate(() => sessionStorage.getItem('xterm.window.id'));
     await page.reload({ waitUntil: 'domcontentloaded' });
     await connected(page);
     await page.waitForFunction(() => tabs.some(tab => tab.cfg.type === 'local' && tab.state === 'connected'), { timeout: 5000 });
-    assert.strictEqual(await page.evaluate(() => sessionStorage.getItem('sshterm.window.id')), windowId);
+    assert.strictEqual(await page.evaluate(() => sessionStorage.getItem('xterm.window.id')), windowId);
     await command(page, 'XTERM_OFFLINE_REFRESH_OK');
     report.steps.push('Refresh reattached the same window and real CMD input/output passed');
     await launch(['--port', String(port), '--no-open']);
@@ -157,7 +157,7 @@ async function command(page, marker) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     assert.strictEqual(path.dirname(path.resolve(sandbox)), path.resolve(os.tmpdir()));
-    assert(path.basename(sandbox).startsWith('sshterm-browser-startup-'));
+    assert(path.basename(sandbox).startsWith('xterm-browser-startup-'));
     fs.rmSync(sandbox, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

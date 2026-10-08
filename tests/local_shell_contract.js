@@ -14,7 +14,7 @@ assert.strictEqual(resolveShell('not-a-shell'), null, 'unknown shell ids must no
 assert.strictEqual(resolveShell('..\\..\\Windows\\System32\\cmd.exe'), null);
 assert.strictEqual(resolveCwd(''), process.env.USERPROFILE || process.cwd());
 assert.strictEqual(resolveCwd(os.tmpdir()), require('path').resolve(os.tmpdir()));
-assert.throws(() => resolveCwd('D:\\sshterm-missing-cwd-dir'), /工作目录不存在/);
+assert.throws(() => resolveCwd('D:\\xterm-missing-cwd-dir'), /工作目录不存在/);
 
 const saved = sanitizeSession({
   name: 'PowerShell', type: 'local', shell: 'pwsh', cwd: 'C:\\work',
@@ -47,13 +47,13 @@ assert.strictEqual(
   let text = '';
   conn.on('data', (buf) => { text += buf.toString('utf8'); });
   await conn.connect();
-  conn.write('echo SSHTERM_LOCAL_OK\r\n');
+  conn.write('echo XTERM_LOCAL_OK\r\n');
   const deadline = Date.now() + 8000;
-  while (!text.includes('SSHTERM_LOCAL_OK') && Date.now() < deadline) {
+  while (!text.includes('XTERM_LOCAL_OK') && Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 50));
   }
   conn.close();
-  assert(text.includes('SSHTERM_LOCAL_OK'), `local shell did not echo marker, got: ${text.slice(-300)}`);
+  assert(text.includes('XTERM_LOCAL_OK'), `local shell did not echo marker, got: ${text.slice(-300)}`);
   console.log('✅ local shell contract passed');
 })().catch((err) => {
   console.error(err);

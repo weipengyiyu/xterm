@@ -34,8 +34,8 @@
     const dot = document.getElementById('conn-status');
     if (dot) dot.className = 'status-dot err';
   };
-  document.addEventListener('sshterm:initialized', () => { initialized = true; ready(); });
-  document.addEventListener('sshterm:connected', () => { connected = true; ready(); });
+  document.addEventListener('xterm:initialized', () => { initialized = true; ready(); });
+  document.addEventListener('xterm:connected', () => { connected = true; ready(); });
   window.addEventListener('error', event => {
     if (finished) return;
     const scriptFailed = event.target instanceof HTMLScriptElement;

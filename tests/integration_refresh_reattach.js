@@ -9,7 +9,7 @@ const { WebSocket } = require('ws');
 const ROOT = path.join(__dirname, '..');
 const PORT = 8895;
 const BASE = `http://127.0.0.1:${PORT}`;
-const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-refresh-'));
+const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-refresh-'));
 fs.writeFileSync(path.join(fixture, 'alive.txt'), 'same connection');
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -88,7 +88,7 @@ function close(ws) {
 (async () => {
   const server = spawn(process.execPath, ['server/index.js', '--port', String(PORT), '--no-open'], {
     cwd: ROOT,
-    env: { ...process.env, SSHTERM_TEST_SFTP_ROOT: fixture },
+    env: { ...process.env, XTERM_TEST_SFTP_ROOT: fixture },
     stdio: 'ignore',
   });
   let firstWs, resumedWs, otherWs;

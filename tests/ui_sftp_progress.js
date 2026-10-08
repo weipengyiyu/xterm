@@ -1,6 +1,6 @@
 // UI 测试: SFTP 上传/下载进度条显示 + 页面不卡
 const puppeteer = require('./puppeteer_test');
-const EDGE = 'C:\\Users\\Administrator\\sshterm\\vendor\\chrome-headless-shell\\chrome-headless-shell.exe';
+const EDGE = 'C:\\Users\\Administrator\\xterm\\vendor\\chrome-headless-shell\\chrome-headless-shell.exe';
 const URL = process.argv[2] || 'http://127.0.0.1:8787/';
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -30,7 +30,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // 1. 上传文件 (触发文件选择器 → accept 临时文件) → 进度条应出现
   console.log('[1] 上传文件...');
   const fs = require('fs');
-  const TMP = 'C:\\Users\\Administrator\\sshterm\\tests\\tmp_progress.txt';
+  const TMP = 'C:\\Users\\Administrator\\xterm\\tests\\tmp_progress.txt';
   fs.writeFileSync(TMP, 'progress test content ' + Date.now());
   const [chooser] = await Promise.all([
     page.waitForFileChooser(),

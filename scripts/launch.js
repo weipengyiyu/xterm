@@ -8,7 +8,7 @@ const { spawn, spawnSync } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 const serverScript = path.join(root, 'server', 'index.js');
-const stateDir = path.join(os.homedir(), '.sshterm');
+const stateDir = path.join(os.homedir(), '.xterm');
 const logDir = path.join(stateDir, 'logs');
 const launcherLog = path.join(logDir, 'launcher.log');
 const stderrLog = path.join(logDir, 'server-stderr.log');
@@ -102,7 +102,7 @@ function runningInfo(url) {
       response.on('end', () => {
         try {
           const info = JSON.parse(body);
-          resolve(response.statusCode === 200 && info.app === 'sshterm' && Number.isInteger(info.pid) ? info : null);
+          resolve(response.statusCode === 200 && info.app === 'xterm' && Number.isInteger(info.pid) ? info : null);
         } catch { resolve(null); }
       });
     });
@@ -121,7 +121,7 @@ async function verifyBrowserConnection(url) {
       response.on('aborted', () => reject(new Error('Browser token request was aborted.')));
       response.on('end', () => {
         try {
-          const match = body.match(/window\.__SSHTERM_TOKEN=(.+?);/);
+          const match = body.match(/window\.__XTERM_TOKEN=(.+?);/);
           if (response.statusCode !== 200 || !match) throw new Error('Browser token is unavailable.');
           resolve(JSON.parse(match[1]));
         } catch (error) { reject(error); }
@@ -173,7 +173,7 @@ function openDesktop(port) {
     cwd: root,
     detached: true,
     stdio: 'ignore',
-    env: { ...process.env, SSHTERM_NODE: process.execPath },
+    env: { ...process.env, XTERM_NODE: process.execPath },
   });
   child.unref();
   log(`Opened application window on port ${port}`);
@@ -317,7 +317,7 @@ async function main() {
 
   await verifyBrowserConnection(url);
   log('Server started successfully.');
-  console.log(`sshterm: ${url}`);
+  console.log(`xterm: ${url}`);
 }
 
 main().catch(error => {

@@ -93,4 +93,4 @@ class StreamingDecoder {
   }
 }
 
-window.SshtermEncoding = { encodeText, decodeBuffer, decoderLabel, StreamingDecoder };
+window.XtermEncoding = { encodeText, decodeBuffer, decoderLabel, StreamingDecoder };

@@ -1,9 +1,9 @@
-# sshterm 功能对标调研与改进方案(评审稿,不改源码)
+# xterm 功能对标调研与改进方案(评审稿,不改源码)
 
 
 > 现行事实索引: [`STATUS.md`](STATUS.md)。
 > 状态刷新: 2026-09-11 — P0 全完成；P1 隧道/跳板/断点续传/主题/快捷键/会话过滤/SFTP 目录拖放已完成；分屏支持逐次加到 2×2；**Zmodem 明确未支持**（无用户确认收发 UI）。详见 docs/ARCHITECTURE.md 与下方对比表。
-> 调研时间: 2026-08-06 | 范围: 主流 SSH/Telnet/串口终端工具 + sshterm 现状对比
+> 调研时间: 2026-08-06 | 范围: 主流 SSH/Telnet/串口终端工具 + xterm 现状对比
 
 ## 一、主流工具功能全景(调研汇总)
 
@@ -19,11 +19,11 @@
 | WindTerm ★31k | 开源(核心闭源) | C | 高性能,多语言,会话管理完整 |
 | electerm ★6k | 开源 | Electron+TS | SSH/SFTP 一体化,书签/同步 |
 | PuTTY / KiTTY | 开源 | C | 轻量经典 |
-| sshterm(本项目) | 开源 | Node+xterm.js | 轻量多协议,浏览器界面 |
+| xterm(本项目) | 开源 | Node+xterm.js | 轻量多协议,浏览器界面 |
 
 ### 2. 功能维度对比(✓=有, - = 无/弱)
 
-| 功能 | Xshell | MobaXterm | Tabby | WindTerm | FinalShell | **sshterm** |
+| 功能 | Xshell | MobaXterm | Tabby | WindTerm | FinalShell | **xterm** |
 |---|---|---|---|---|---|---|
 | SSH 密码/密钥 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | SSH 隧道/端口转发 | ✓ | ✓ | ✓ | ✓ | ✓ | **✓** |
@@ -48,7 +48,7 @@
 | 分屏/多窗口 | ✓ | ✓ | ✓ | ✓ | ✓ | **✓**(双格拖拽 / 最多 2×2) |
 | 记住标签布局 | ✓ | ✓ | ✓ | - | ✓ | 部分(刷新恢复) |
 
-## 二、sshterm 现状盘点(已完成 23 项测试全绿)
+## 二、xterm 现状盘点(已完成 23 项测试全绿)
 
 - SSH(密码/密钥)+ keepalive 防断 + 断开原因细分
 - Telnet(自动登录 + IAC 协商)

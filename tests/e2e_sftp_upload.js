@@ -6,8 +6,8 @@ const HTTP_BASE = 'http://127.0.0.1:' + (WS_URL.match(/:(\d+)/) || [null, '8787'
 const ws = new WebSocket(WS_URL);
 
 const TABID = 97;
-const TEST_FILE = `sshterm_upload_test_${Date.now()}.txt`;
-const TEST_CONTENT = 'sshterm upload test ' + Date.now() + '\nline2\n';
+const TEST_FILE = `xterm_upload_test_${Date.now()}.txt`;
+const TEST_CONTENT = 'xterm upload test ' + Date.now() + '\nline2\n';
 let connId = null, gotShell = false, out = '', home = null, verifying = false,
     uploaded = false, verified = false;
 

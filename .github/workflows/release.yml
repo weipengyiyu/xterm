@@ -37,13 +37,13 @@ jobs:
       - name: Sign and verify Authenticode artifact
         shell: pwsh
         run: |
-          $pfx = Join-Path $env:RUNNER_TEMP 'sshterm-signing.pfx'
+          $pfx = Join-Path $env:RUNNER_TEMP 'xterm-signing.pfx'
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGNING_CERT_BASE64))
           try {
             $signtool = (Get-Command signtool.exe -ErrorAction Stop).Source
-            & $signtool sign /fd SHA256 /f $pfx /p $env:SIGNING_CERT_PASSWORD /tr http://timestamp.digicert.com /td SHA256 dist/sshterm.exe
+            & $signtool sign /fd SHA256 /f $pfx /p $env:SIGNING_CERT_PASSWORD /tr http://timestamp.digicert.com /td SHA256 dist/xterm.exe
             if ($LASTEXITCODE -ne 0) { throw "signtool sign failed: $LASTEXITCODE" }
-            & $signtool verify /pa /all dist/sshterm.exe
+            & $signtool verify /pa /all dist/xterm.exe
             if ($LASTEXITCODE -ne 0) { throw "signtool verify failed: $LASTEXITCODE" }
           } finally {
             Remove-Item -LiteralPath $pfx -Force -ErrorAction SilentlyContinue
@@ -51,6 +51,6 @@ jobs:
       - name: Upload signed release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sshterm-${{ inputs.version }}-signed
-          path: dist/sshterm.exe
+          name: xterm-${{ inputs.version }}-signed
+          path: dist/xterm.exe
           if-no-files-found: error

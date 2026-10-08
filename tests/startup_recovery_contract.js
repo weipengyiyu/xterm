@@ -52,16 +52,16 @@ assert.strictEqual(permanent.replaced.length, 0, 'permanent failures must not re
 assert.match(permanent.status.textContent, /界面初始化失败/);
 
 const recovered = fixture(broken.replaced[0]);
-recovered.emit('sshterm:connected');
-recovered.emit('sshterm:initialized');
+recovered.emit('xterm:connected');
+recovered.emit('xterm:initialized');
 recovered.tick(6000);
 assert.strictEqual(recovered.replaced.length, 0);
 assert.strictEqual(recovered.history[0], 'http://127.0.0.1:8787/', 'successful recovery must remove retry markers');
 
 const benign = fixture();
 benign.error();
-benign.emit('sshterm:initialized');
-benign.emit('sshterm:connected');
+benign.emit('xterm:initialized');
+benign.emit('xterm:connected');
 benign.tick(250);
 benign.error();
 benign.tick(250);

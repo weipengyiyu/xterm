@@ -68,7 +68,7 @@ End Function
 
 Function TailLog(ws, fso)
   Dim logFile, ts, text
-  logFile = ws.ExpandEnvironmentStrings("%USERPROFILE%\.sshterm\logs\launcher.log")
+  logFile = ws.ExpandEnvironmentStrings("%USERPROFILE%\.xterm\logs\launcher.log")
   TailLog = "Log:" & vbCrLf & logFile
   If Not fso.FileExists(logFile) Then Exit Function
   On Error Resume Next

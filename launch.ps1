@@ -34,7 +34,7 @@ try {
 } catch {
   $startupError = $_.Exception.Message
   try {
-    $logDir = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.sshterm\logs'
+    $logDir = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.xterm\logs'
     New-Item -ItemType Directory -Path $logDir -Force | Out-Null
     Add-Content -LiteralPath (Join-Path $logDir 'launcher.log') -Encoding UTF8 -Value ("{0} Startup failed: {1}" -f (Get-Date -Format s), $startupError)
   } catch { }

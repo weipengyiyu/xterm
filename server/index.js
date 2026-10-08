@@ -1,4 +1,4 @@
-// sshterm 服务端: HTTP 静态 + WebSocket 路由 + 连接管理 + 会话持久化
+// xterm 服务端: HTTP 静态 + WebSocket 路由 + 连接管理 + 会话持久化
 // 启动: node server/index.js [--port 8787] [--no-open]
 // Modules: security / logging / sessions-store / ssh-config-loader / sftp-http /
 //          vnc-bridge / net-scan / ws-handlers (behavior preserved).
@@ -39,7 +39,7 @@ const SERVER_BUILD_ID = String(Math.trunc(Math.max(
   fs.statSync(path.join(ROOT, 'package.json')).mtimeMs,
 )));
 const SERVER_STARTED_AT = new Date().toISOString();
-const CONN_DIR = path.join(os.homedir(), '.sshterm');
+const CONN_DIR = path.join(os.homedir(), '.xterm');
 const CONN_FILE = path.join(CONN_DIR, 'sessions.json');
 const CONN_BACKUP_FILE = `${CONN_FILE}.bak`;
 const connections = new Map();
@@ -47,7 +47,7 @@ const windows = new Map();
 const windowCleanupTimers = new Map();
 const AUTO_EXIT_GRACE_MS = 12 * 1000;
 const DETACHED_CONNECTION_GRACE_MS = (() => {
-  const value = Number(process.env.SSHTERM_DETACHED_GRACE_MS || 0);
+  const value = Number(process.env.XTERM_DETACHED_GRACE_MS || 0);
   return Number.isFinite(value) && value > 0
     ? Math.min(value, 7 * 24 * 60 * 60 * 1000)
     : 0;
@@ -58,7 +58,7 @@ function getConnection(ws, id) { return connections.get(connectionKey(ws, id)); 
 function getHttpConnection(qs) {
   const ws = windows.get(String(qs.get('window') || ''));
   if (ws) return getConnection(ws, parseInt(qs.get('conn'), 10));
-  return process.env.SSHTERM_TEST_SFTP_ROOT ? connections.get(parseInt(qs.get('conn'), 10)) : null;
+  return process.env.XTERM_TEST_SFTP_ROOT ? connections.get(parseInt(qs.get('conn'), 10)) : null;
 }
 
 function requestedWindowId(req) {
@@ -94,9 +94,9 @@ function scheduleWindowCleanup(windowId) {
   windowCleanupTimers.set(windowId, timer);
 }
 const liveByConfig = new Map();
-if (process.env.SSHTERM_TEST_SFTP_ROOT) {
+if (process.env.XTERM_TEST_SFTP_ROOT) {
   const { installLocalSftpFixture } = require('./test-sftp-fixture');
-  installLocalSftpFixture(connections, process.env.SSHTERM_TEST_SFTP_ROOT);
+  installLocalSftpFixture(connections, process.env.XTERM_TEST_SFTP_ROOT);
 }
 const MAX_CONCURRENT_UPLOADS = 3;
 const uploadState = { n: 0 };
@@ -161,7 +161,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && url === '/launcher-info') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({
-      app: 'sshterm',
+      app: 'xterm',
       buildId: SERVER_BUILD_ID,
       pid: process.pid,
       startedAt: SERVER_STARTED_AT,
@@ -174,7 +174,7 @@ const server = http.createServer((req, res) => {
       return res.end('forbidden: untrusted origin');
     }
     res.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'no-store' });
-    return res.end(`window.__SSHTERM_TOKEN=${JSON.stringify(CLIENT_TOKEN)};`);
+    return res.end(`window.__XTERM_TOKEN=${JSON.stringify(CLIENT_TOKEN)};`);
   }
   if (url.startsWith('/api/') && (!hasClientToken(req) || !isTrustedRequest(req))) {
     res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -342,7 +342,7 @@ async function doConnect(ws, cfg, tabId) {
   send(ws, { type: 'status', id: tabId, state: 'connecting', msg: '连接中…' });
   log('info', `连接 ${cfg.name || cfg.type}:${cfg.host || cfg.port || cfg.port} (${cfg.type})`);
 
-  // 终端输出自动落盘: ~/.sshterm/session-logs/<会话名>-<时间戳>.log
+  // 终端输出自动落盘: ~/.xterm/session-logs/<会话名>-<时间戳>.log
   // 隐私: 默认关闭，需用户显式在会话配置勾选"记录会话日志"才启用。
   const enc = cfg.encoding || 'utf-8';
   const safeName = (cfg.name || cfg.type).replace(/[\\/:*?"<>|]/g, '_');
@@ -515,7 +515,7 @@ wss.on('connection', (ws, req) => {
       id: Number.isInteger(m.id) ? m.id : undefined,
       action: m.type,
       msg: String(e.message || e),
-      occupied: !!e.sshtermOccupied,
+      occupied: !!e.xtermOccupied,
     }));
   });
 });
@@ -530,12 +530,12 @@ server.listen(PORT, '127.0.0.1', () => {
     console.error('[token] 无法写入 CLI token 文件:', e.message);
   }
   console.log('┌──────────────────────────────────────────────┐');
-  console.log('│  sshterm  —  SSH / Telnet / VNC / 串口工具   │');
+  console.log('│  xterm  —  SSH / Telnet / VNC / 串口工具   │');
   console.log('└──────────────────────────────────────────────┘');
   console.log(`  地址: http://127.0.0.1:${PORT}`);
   console.log(`  会话: ${CONN_FILE}`);
   console.log(`  日志: ${getLogFile()}`);
-  log('info', `sshterm 服务启动 (端口 ${PORT})`);
+  log('info', `xterm 服务启动 (端口 ${PORT})`);
   scheduleIdleExit();
   // The desktop window is the application shell. --no-open remains accepted
   // so tests and the desktop host can start the engine without a system browser.

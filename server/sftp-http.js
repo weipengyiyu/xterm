@@ -35,7 +35,7 @@ function handleSftpHttp(req, res, ctx) {
     const qs = new URLSearchParams(req.url.split('?')[1] || '');
     const name = qs.get('file') || '';
     const safe = path.basename(name).replace(/[\\/]/g, '_');
-    const fp = path.join(os.homedir(), '.sshterm', 'zmodem', safe);
+    const fp = path.join(os.homedir(), '.xterm', 'zmodem', safe);
     // 使用流式传输避免大文件占用过多内存
     if (!fs.existsSync(fp)) { res.writeHead(404); return res.end('文件不存在'); }
     res.writeHead(200, {

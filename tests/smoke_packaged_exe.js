@@ -13,12 +13,12 @@ const { spawn } = require('child_process');
 const { WebSocket } = require('ws');
 
 const ROOT = path.join(__dirname, '..');
-const EXE = path.join(ROOT, 'dist', 'sshterm.exe');
-const PORT = Number(process.env.SSHTERM_SMOKE_PORT || 8903);
+const EXE = path.join(ROOT, 'dist', 'xterm.exe');
+const PORT = Number(process.env.XTERM_SMOKE_PORT || 8903);
 const BASE = `http://127.0.0.1:${PORT}`;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
-if (!fs.existsSync(EXE)) throw new Error('dist/sshterm.exe 不存在；请先运行 node scripts/build-exe.js');
+if (!fs.existsSync(EXE)) throw new Error('dist/xterm.exe 不存在；请先运行 node scripts/build-exe.js');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -48,7 +48,7 @@ async function waitForApp(deadline = Date.now() + 30000) {
 async function readToken() {
   const res = await httpGet('/bootstrap.js', { Origin: ORIGIN, Referer: `${ORIGIN}/` });
   assert.strictEqual(res.status, 200, 'bootstrap.js must be served to a trusted origin');
-  const match = res.body.match(/__SSHTERM_TOKEN\s*=\s*"([^"]+)"/);
+  const match = res.body.match(/__XTERM_TOKEN\s*=\s*"([^"]+)"/);
   assert(match, 'bootstrap token missing from packaged response');
   return match[1];
 }
@@ -91,11 +91,11 @@ function expectWsClose(pathname, token, timeout = 15000) {
 }
 
 async function startApp(profile) {
-  // SSHTERM_SMOKE_SOURCE=1 runs the same flow against `node server/index.js`
+  // XTERM_SMOKE_SOURCE=1 runs the same flow against `node server/index.js`
   // instead of the packaged EXE.  That debugs the assertions without a rebuild,
   // but it does NOT validate packaging (bundled node_modules / native modules),
   // so it must never replace the EXE run before a release.
-  const sourceMode = process.env.SSHTERM_SMOKE_SOURCE === '1';
+  const sourceMode = process.env.XTERM_SMOKE_SOURCE === '1';
   const cmd = sourceMode ? process.execPath : EXE;
   const args = sourceMode
     ? ['server/index.js', '--port', String(PORT), '--no-open']
@@ -107,7 +107,7 @@ async function startApp(profile) {
     stdio: 'ignore',
   });
   const info = await waitForApp();
-  assert.strictEqual(info.app, 'sshterm', 'packaged launcher-info must identify sshterm');
+  assert.strictEqual(info.app, 'xterm', 'packaged launcher-info must identify xterm');
   assert.ok(Number.isInteger(info.pid), 'launcher-info must expose the real PID');
   const token = await readToken();
   const ws = await openWs('/', token);
@@ -136,7 +136,7 @@ const checks = [];
 function record(name) { checks.push(name); console.log(`   ✓ ${name}`); }
 
 (async () => {
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-exe-smoke-'));
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-exe-smoke-'));
   let app = null;
   const sessionId = { value: '' };
 
@@ -147,7 +147,7 @@ function record(name) { checks.push(name); console.log(`   ✓ ${name}`); }
     // ---------- static assets ----------
     const ui = await httpGet('/', { Origin: ORIGIN });
     assert.strictEqual(ui.status, 200, 'UI index must be served');
-    assert(ui.body.includes('sshterm'), 'UI page must identify the product');
+    assert(ui.body.includes('xterm'), 'UI page must identify the product');
     const vendor = await httpGet('/vendor/@xterm/xterm/lib/xterm.js', { Origin: ORIGIN });
     assert.strictEqual(vendor.status, 200, 'bundled xterm asset must be served from the package');
     record('web assets + bundled node_modules served');
@@ -196,7 +196,7 @@ function record(name) { checks.push(name); console.log(`   ✓ ${name}`); }
       },
     }));
     sessionId.value = (await response).id;
-    const secretsPath = path.join(profile, '.sshterm', 'secrets.enc');
+    const secretsPath = path.join(profile, '.xterm', 'secrets.enc');
     assert(fs.existsSync(secretsPath), 'DPAPI secrets file must be written by the packaged build');
     assert(!fs.readFileSync(secretsPath, 'utf8').includes(vncPassword),
       'DPAPI-protected secrets must not contain plaintext');

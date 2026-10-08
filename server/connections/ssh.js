@@ -7,7 +7,7 @@ const net = require('net');
 const { Client } = require('ssh2');
 const BaseConnection = require('./base');
 
-const KNOWN_HOSTS_PATH = path.join(os.homedir(), '.sshterm', 'known-hosts.json');
+const KNOWN_HOSTS_PATH = path.join(os.homedir(), '.xterm', 'known-hosts.json');
 const DEFAULT_READY_TIMEOUT = 30000;
 
 function readyTimeoutFor(config) {
@@ -156,15 +156,15 @@ function makeHostVerifier(connection, hostName) {
 function applyAuth(cfg, config) {
   const { auth = 'password', password, privateKey, passphrase } = config;
   if (auth === 'key') {
-    // Private key path whitelist: only allow files under ~/.ssh or ~/.sshterm.
+    // Private key path whitelist: only allow files under ~/.ssh or ~/.xterm.
     // A token holder must not be able to read arbitrary local files as a key.
     if (privateKey) {
       const resolved = path.resolve(privateKey);
       const sshDir = path.join(os.homedir(), '.ssh');
-      const sshtermDir = path.join(os.homedir(), '.sshterm');
+      const xtermDir = path.join(os.homedir(), '.xterm');
       const allowed = resolved === sshDir
         || resolved.startsWith(sshDir + path.sep)
-        || resolved.startsWith(sshtermDir + path.sep);
+        || resolved.startsWith(xtermDir + path.sep);
       if (!allowed) throw new Error('私钥路径不在允许目录内: ' + privateKey);
     }
     cfg.privateKey = fs.readFileSync(privateKey);
@@ -635,8 +635,8 @@ class SSHConnection extends BaseConnection {
   _queryShellCwdViaPty(timeoutMs = 3500) {
     if (this._pwdCapture) return Promise.resolve(this._shellCwd || null);
     const token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-    const start = `__SSHTERM_PWD_START_${token}__`;
-    const end = `__SSHTERM_PWD_END_${token}__`;
+    const start = `__XTERM_PWD_START_${token}__`;
+    const end = `__XTERM_PWD_END_${token}__`;
     const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return new Promise((resolve) => {
       this._pwdCapture = {
@@ -971,7 +971,7 @@ class SSHConnection extends BaseConnection {
     _collectHostStats() {
       // 单条命令尽量兼容主流 Linux/macOS (BusyBox 也基本支持)
       const script = [
-        'echo __SSHTERM_STATS_START__',
+        'echo __XTERM_STATS_START__',
         'echo MEMINFO_START',
         'head -n 24 /proc/meminfo 2>/dev/null || true',
         'echo MEMINFO_END',
@@ -985,7 +985,7 @@ class SSHConnection extends BaseConnection {
         'echo DISK_START',
         'df -Pk 2>/dev/null | awk \'NR>1 && $1 !~ /tmpfs|devtmpfs|squashfs/ && $6 !~ /\\/dev\\/loop/ { gsub(/%/,"",$5); printf "DISK %s %s %d %d\\n", $6, $5, $4*1024, $2*1024 }\'',
         'echo DISK_END',
-        'echo __SSHTERM_STATS_END__',
+        'echo __XTERM_STATS_END__',
       ].join('\n');
 
       return new Promise((resolve, reject) => {
@@ -1006,8 +1006,8 @@ class SSHConnection extends BaseConnection {
           stream.stderr.on('data', () => {});
           stream.on('close', () => {
             clearTimeout(timer);
-            const start = buf.indexOf('__SSHTERM_STATS_START__');
-            const end = buf.indexOf('__SSHTERM_STATS_END__');
+            const start = buf.indexOf('__XTERM_STATS_START__');
+            const end = buf.indexOf('__XTERM_STATS_END__');
             if (start < 0 || end < 0) return finish(new Error('主机状态输出无法解析'));
             const body = buf.slice(start, end);
             const { memUsed, memTotal } = parseRemoteMem(body);

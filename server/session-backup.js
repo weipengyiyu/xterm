@@ -3,7 +3,7 @@
 const { randomBytes, scryptSync, createCipheriv, createDecipheriv } = require('crypto');
 const os = require('os');
 
-const FORMAT = 'sshterm-backup';
+const FORMAT = 'xterm-backup';
 const VERSION = 1;
 const MAX_BACKUP_BYTES = 4 * 1024 * 1024;
 const KDF = { name: 'scrypt', N: 16384, r: 8, p: 1, keyLength: 32 };
@@ -36,7 +36,7 @@ function readBackup(serialized, passphrase) {
   let backup;
   try { backup = JSON.parse(serialized); } catch { throw new Error('备份文件不是有效 JSON'); }
   if (!backup || backup.format !== FORMAT || backup.version !== VERSION || backup.cipher !== 'aes-256-gcm' || backup.kdf?.name !== 'scrypt') {
-    throw new Error('不支持的 sshterm 备份格式');
+    throw new Error('不支持的 xterm 备份格式');
   }
   try {
     const salt = Buffer.from(backup.salt, 'base64');

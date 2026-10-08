@@ -1,4 +1,4 @@
-# sshterm — SSH / Telnet / 串口 多标签连接工具
+# xterm — SSH / Telnet / 串口 多标签连接工具
 
 > 文档现状索引：[`docs/STATUS.md`](docs/STATUS.md)（最后更新 2026-09-11）。功能对标见 [`docs/FEATURE-PLAN.md`](docs/FEATURE-PLAN.md)；模块结构见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
@@ -52,7 +52,7 @@ launcher.vbs
 stop.vbs
 ```
 
-确认提示后，它会通过 `http://127.0.0.1:8787/launcher-info` 核实服务身份，只结束该 sshterm 实例返回的准确 PID，不会批量结束其他 `node.exe` 进程。停止服务会断开当前 SSH、VNC 和文件传输连接；需要再次启动时双击 `launcher.vbs`。
+确认提示后，它会通过 `http://127.0.0.1:8787/launcher-info` 核实服务身份，只结束该 xterm 实例返回的准确 PID，不会批量结束其他 `node.exe` 进程。停止服务会断开当前 SSH、VNC 和文件传输连接；需要再次启动时双击 `launcher.vbs`。
 
 也可以手动执行隐藏启动脚本：
 
@@ -71,16 +71,16 @@ npm start
 
 ### 启动故障排查
 
-`launcher.vbs` 启动失败会显示错误提示；终端入口返回非零退出码。如果没有打开页面，请检查以下日志（Linux / macOS 位于 `~/.sshterm/logs/`）：
+`launcher.vbs` 启动失败会显示错误提示；终端入口返回非零退出码。如果没有打开页面，请检查以下日志（Linux / macOS 位于 `~/.xterm/logs/`）：
 
 ```text
-%USERPROFILE%\.sshterm\logs\launcher.log
-%USERPROFILE%\.sshterm\logs\server-stderr.log
-%USERPROFILE%\.sshterm\logs\server-stdout.log
+%USERPROFILE%\.xterm\logs\launcher.log
+%USERPROFILE%\.xterm\logs\server-stderr.log
+%USERPROFILE%\.xterm\logs\server-stdout.log
 ```
 
 勾选“记住密码”后，密码使用当前 Windows 用户的 DPAPI 加密保存到
-`%USERPROFILE%\.sshterm\secrets.enc`。如果旧版本生成的加密文件已经损坏，编辑会话重新输入一次密码并保存即可重建；之后 launcher 或服务重启都能自动恢复凭据。
+`%USERPROFILE%\.xterm\secrets.enc`。如果旧版本生成的加密文件已经损坏，编辑会话重新输入一次密码并保存即可重建；之后 launcher 或服务重启都能自动恢复凭据。
 
 常用检查命令：
 
@@ -105,7 +105,7 @@ Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8787/
 - 分屏:当前标签可逐次增加分屏，最多 4 格（2×2）；双格时可拖动分隔条，单格用 ✕ 关闭
 - 工作区:保存并恢复标签顺序、打开的会话以及分屏数量/比例（浏览器存储不保存密码和私钥）
 - VNC 远程桌面:在“＋ 新建连接”中选择 VNC，每个连接作为独立标签页运行，不依赖 SSH/终端会话
-- 会话管理:保存/编辑/删除,服务重启后从 `%USERPROFILE%\.sshterm\sessions.json` 自动恢复；写入时保留 `.bak` 备份
+- 会话管理:保存/编辑/删除,服务重启后从 `%USERPROFILE%\.xterm\sessions.json` 自动恢复；写入时保留 `.bak` 备份
 - 双击左侧会话直接连接;悬停可编辑/删除
 - 中文输入、256 色、滚动缓冲(5000 行)
 
@@ -137,7 +137,7 @@ Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8787/
 
 ### 刷新页面
 
-- `Ctrl+F5` 只重建浏览器界面；后台连接默认保留并由新页面重新挂接（可通过环境变量 `SSHTERM_DETACHED_GRACE_MS` 配置孤儿连接清理）；
+- `Ctrl+F5` 只重建浏览器界面；后台连接默认保留并由新页面重新挂接（可通过环境变量 `XTERM_DETACHED_GRACE_MS` 配置孤儿连接清理）；
 - 刷新期间产生的最近 256 KB 终端输出会在挂接后补发；
 - 重新挂接不会再次执行“连接后执行”命令；
 - 服务器进程重启时浏览器会自动刷新 token 并退避重连 WebSocket；远端主动断开或网络中断则按各标签的重连策略处理。
@@ -159,7 +159,7 @@ Node 服务端 (localhost:8787)
  ├─ ssh2      → SSH 会话
  ├─ net       → Telnet 会话
  └─ serialport→ 串口会话
-会话持久化 → %USERPROFILE%\.sshterm\sessions.json
+会话持久化 → %USERPROFILE%\.xterm\sessions.json
 ```
 
 - 只监听 `127.0.0.1`,不对外暴露;
@@ -179,7 +179,7 @@ run.sh                Linux / macOS 启动入口
 launcher.vbs          Windows 无窗口启动入口
 launch.ps1            PowerShell 启动入口（-NoBrowser / -Port / -Foreground）
 scripts/launch.js     共用启动器：目录解析、后台启动、健康检查、浏览器及日志
-stop.vbs              安全识别并停止后台 sshterm 服务
+stop.vbs              安全识别并停止后台 xterm 服务
 ```
 
 ## 已知边界
@@ -189,7 +189,7 @@ stop.vbs              安全识别并停止后台 sshterm 服务
 - 目录 ZIP 会跳过符号链接以及扫描后消失/无法读取的文件，并在进度与完成状态中显示跳过数量；
 - 使用 `launcher.vbs` 时，关闭浏览器不会停止后台服务，再次启动会使用仍在后台内存中的凭据恢复会话；如需彻底停止，可在工具栏选择“全部关闭”后双击 `stop.vbs`；
 - 使用 `run.bat --fg`、`sh ./run.sh --fg` 或 `npm start` 时，关闭前台终端会停止服务；
-- 独立 EXE：本地可用 `npm run build:exe`（caxa）打出 `dist/sshterm.exe`；**对外分发**须走 GitHub Actions 签名发布（见 `docs/RELEASE.md`），不要手传未签名包。
+- 独立 EXE：本地可用 `npm run build:exe`（caxa）打出 `dist/xterm.exe`；**对外分发**须走 GitHub Actions 签名发布（见 `docs/RELEASE.md`），不要手传未签名包。
 
 ### 串口回环验证(可选)
 

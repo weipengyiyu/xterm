@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const PORT = 8799;
 const ROOT = path.join(__dirname, '..');
-const TEST_PROFILE = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-full-suite-'));
+const TEST_PROFILE = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-full-suite-'));
 const TEST_ENV = {
   ...process.env,
   USERPROFILE: TEST_PROFILE,
@@ -101,7 +101,7 @@ async function getToken(deadline = Date.now() + 10000) {
             : reject(new Error(`HTTP ${response.statusCode}`)));
         }).on('error', reject);
       });
-      const match = body.match(/__SSHTERM_TOKEN\s*=\s*"([^"]+)"/);
+      const match = body.match(/__XTERM_TOKEN\s*=\s*"([^"]+)"/);
       if (match) return match[1];
     } catch {}
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -110,7 +110,7 @@ async function getToken(deadline = Date.now() + 10000) {
 }
 
 async function main() {
-  console.log('══════════ sshterm 测试套件 ══════════\n');
+  console.log('══════════ xterm 测试套件 ══════════\n');
   // 起临时服务端 (--no-open 避免弹浏览器)
   const srv = spawn('node', ['server/index.js', '--port', String(PORT), '--no-open'],
     { cwd: ROOT, env: TEST_ENV });

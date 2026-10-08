@@ -11,7 +11,7 @@ assert.strictEqual(gbk.toString('hex'), 'd6d0cec420313233a3a1',
   '中文 123！ 的 GBK 字节必须正确 (d6d0 中 / cec4 文 / 20 / 313233 / a3a1 ！)');
 
 // ASCII/半角内容按 latin1 透传 (GBK 单字节区兼容 ASCII)
-assert.strictEqual(encodeText('hello, sshterm', 'gbk').toString(), 'hello, sshterm');
+assert.strictEqual(encodeText('hello, xterm', 'gbk').toString(), 'hello, xterm');
 
 // 未映射字符用 '?' 替换, 不抛异常
 const q = encodeText('\uFFFD\u2028', 'gbk');

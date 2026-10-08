@@ -9,7 +9,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
-const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-launch-'));
+const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-launch-'));
 const moved = path.join(sandbox, '移动 项目 & portable');
 const profile = path.join(sandbox, 'profile');
 const env = { ...process.env, USERPROFILE: profile, HOME: profile };
@@ -84,7 +84,7 @@ async function stop(port) {
 async function exercise(command, args, options) {
   const port = await freePort();
   const result = await run(command, args(port), options);
-  const errorLog = path.join(profile, '.sshterm', 'logs', 'server-stderr.log');
+  const errorLog = path.join(profile, '.xterm', 'logs', 'server-stderr.log');
   assert.strictEqual(result.code, 0, result.output + (fs.existsSync(errorLog) ? fs.readFileSync(errorLog, 'utf8') : ''));
   const info = JSON.parse(await request(port));
   owned.add(info.pid);
@@ -108,8 +108,8 @@ async function exercise(command, args, options) {
       const { WebSocketServer } = require('ws');
       const port = Number(process.argv[process.argv.indexOf('--port') + 1]);
       const server = http.createServer((req, res) => {
-        if (req.url === '/bootstrap.js') return res.end('window.__SSHTERM_TOKEN="fixture";');
-        res.end(JSON.stringify({ app: 'sshterm', pid: process.pid, cwd: process.cwd(), args: process.argv.slice(2) }));
+        if (req.url === '/bootstrap.js') return res.end('window.__XTERM_TOKEN="fixture";');
+        res.end(JSON.stringify({ app: 'xterm', pid: process.pid, cwd: process.cwd(), args: process.argv.slice(2) }));
       });
       new WebSocketServer({ server }).on('connection', ws => {
         ws.on('message', () => ws.send(JSON.stringify({ type: 'sessions', list: [] })));
@@ -151,18 +151,18 @@ async function exercise(command, args, options) {
     const failed = await run(process.execPath, nodeArgs(await freePort()));
     assert.strictEqual(failed.code, 1, failed.output);
     assert.match(failed.output, /Server exited during startup/);
-    assert.match(fs.readFileSync(path.join(profile, '.sshterm', 'logs', 'server-stderr.log'), 'utf8'), /fixture startup error/);
+    assert.match(fs.readFileSync(path.join(profile, '.xterm', 'logs', 'server-stderr.log'), 'utf8'), /fixture startup error/);
     const foreground = await run(process.execPath, [launcher, '--fg', '--no-open', '--port', String(await freePort())]);
     assert.strictEqual(foreground.code, 7, foreground.output);
 
-    // A different program on the port must not be mistaken for sshterm.
+    // A different program on the port must not be mistaken for xterm.
     fs.writeFileSync(path.join(moved, 'server', 'index.js'), `
       require('http').createServer((req, res) => res.end('{}'))
         .listen(Number(process.argv[process.argv.indexOf('--port') + 1]), '127.0.0.1');
     `);
     let foreignApp = 'other';
     foreign = http.createServer((req, res) => {
-      if (req.url === '/bootstrap.js') return res.end('window.__SSHTERM_TOKEN="fixture";');
+      if (req.url === '/bootstrap.js') return res.end('window.__XTERM_TOKEN="fixture";');
       res.end(JSON.stringify({ app: foreignApp, pid: process.pid }));
     });
     foreign.on('upgrade', (req, socket) => socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'));
@@ -170,10 +170,10 @@ async function exercise(command, args, options) {
     const collision = await run(process.execPath, nodeArgs(foreign.address().port));
     assert.strictEqual(collision.code, 1, collision.output);
     assert.strictEqual(JSON.parse(await request(foreign.address().port)).app, 'other');
-    assert.match(fs.readFileSync(path.join(profile, '.sshterm', 'logs', 'server-stderr.log'), 'utf8'), /EADDRINUSE/);
+    assert.match(fs.readFileSync(path.join(profile, '.xterm', 'logs', 'server-stderr.log'), 'utf8'), /EADDRINUSE/);
 
     // HTTP health alone must not let a launcher report success.
-    foreignApp = 'sshterm';
+    foreignApp = 'xterm';
     const websocketFailed = await run(process.execPath, nodeArgs(foreign.address().port));
     assert.strictEqual(websocketFailed.code, 1, websocketFailed.output);
     assert.match(websocketFailed.output, /Unexpected server response: 403/);
@@ -181,8 +181,8 @@ async function exercise(command, args, options) {
 
     // Exercise the actual server with a disposable profile, from an unrelated cwd.
     const actual = await exercise(process.execPath, port => [path.join(root, 'scripts', 'launch.js'), '--no-open', '--port', String(port)]);
-    assert.match(await request(actual.port, '/'), /<title>(?:xterm|sshterm)\b/);
-    assert.match(await request(actual.port, '/bootstrap.js'), /__SSHTERM_TOKEN/);
+    assert.match(await request(actual.port, '/'), /<title>(?:xterm|xterm)\b/);
+    assert.match(await request(actual.port, '/bootstrap.js'), /__XTERM_TOKEN/);
     await stop(actual.port);
     console.log('✅ launcher relocation, wrappers, persistence, failure logs and real-server startup passed');
   } catch (error) {
@@ -190,7 +190,7 @@ async function exercise(command, args, options) {
     throw error;
   } finally {
     if (foreign) await new Promise(resolve => foreign.close(resolve));
-    const logFile = path.join(profile, '.sshterm', 'logs', 'launcher.log');
+    const logFile = path.join(profile, '.xterm', 'logs', 'launcher.log');
     if (fs.existsSync(logFile)) {
       for (const match of fs.readFileSync(logFile, 'utf8').matchAll(/Started detached server PID (\d+)/g)) {
         owned.add(Number(match[1]));
@@ -200,7 +200,7 @@ async function exercise(command, args, options) {
     await sleep(300);
     // Validate the generated absolute target before recursively cleaning it up.
     assert.strictEqual(path.dirname(path.resolve(sandbox)), path.resolve(os.tmpdir()));
-    assert(path.basename(sandbox).startsWith('sshterm-launch-'));
+    assert(path.basename(sandbox).startsWith('xterm-launch-'));
     fs.rmSync(sandbox, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

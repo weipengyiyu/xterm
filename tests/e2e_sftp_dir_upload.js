@@ -6,7 +6,7 @@ const HTTP_BASE = 'http://127.0.0.1:' + (WS_URL.match(/:(\d+)/) || [null, '8787'
 const ws = new WebSocket(WS_URL);
 
 const TABID = 99;
-const DIR = `sshterm_dirtest_${Date.now()}`;
+const DIR = `xterm_dirtest_${Date.now()}`;
 const FILES = [
   { rel: `${DIR}/main.c`, content: 'int main(){return 0;}\n' },
   { rel: `${DIR}/src/util.h`, content: '#ifndef UTIL_H\n#define UTIL_H\n#endif\n' },

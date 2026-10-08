@@ -1,5 +1,5 @@
 {
-  "name": "sshterm",
+  "name": "xterm",
   "version": "1.0.0",
   "description": "SSH / Telnet / 串口 多标签终端应用 (本机引擎 + 应用窗口)",
   "main": "server/index.js",

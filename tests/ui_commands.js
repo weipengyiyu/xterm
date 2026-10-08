@@ -1,6 +1,6 @@
 // UI 测试: 快捷命令 (保存/记忆/执行) + 连接后自动执行脚本
 const puppeteer = require('./puppeteer_test');
-const EDGE = 'C:\\Users\\Administrator\\sshterm\\vendor\\chrome-headless-shell\\chrome-headless-shell.exe';
+const EDGE = 'C:\\Users\\Administrator\\xterm\\vendor\\chrome-headless-shell\\chrome-headless-shell.exe';
 const URL = process.argv[2] || 'http://127.0.0.1:8787/';
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -107,7 +107,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   await page.evaluate(() => {
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i);
-      if (k && k.startsWith('sshterm.commands.')) localStorage.removeItem(k);
+      if (k && k.startsWith('xterm.commands.')) localStorage.removeItem(k);
     }
   });
   try {

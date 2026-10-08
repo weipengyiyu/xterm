@@ -25,7 +25,7 @@ ws.on('message', (raw, binary) => {
     for (const k of ['password', 'passphrase', 'loginPass']) {
       if (Object.prototype.hasOwnProperty.call(item, k)) return fail(`列表泄漏字段: ${k}`);
     }
-    const file = path.join(os.homedir(), '.sshterm', 'sessions.json');
+    const file = path.join(os.homedir(), '.xterm', 'sessions.json');
     const text = fs.readFileSync(file, 'utf8');
     if (text.includes('MUST_NOT_BE_WRITTEN')) return fail('sessions.json 写入了明文凭据');
     ws.send(JSON.stringify({ type: 'delete', id: savedId }));

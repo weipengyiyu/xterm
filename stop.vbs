@@ -1,4 +1,4 @@
-' sshterm safe stop launcher - double-click to stop only the verified local service
+' xterm safe stop launcher - double-click to stop only the verified local service
 Option Explicit
 
 Const LauncherInfoUrl = "http://127.0.0.1:8787/launcher-info"
@@ -18,9 +18,9 @@ If Err.Number <> 0 Then
   Err.Clear
   On Error GoTo 0
   If isDryRun Then
-    WScript.Echo "sshterm service is not running: " & requestError
+    WScript.Echo "xterm service is not running: " & requestError
   Else
-    MsgBox "The sshterm service is not running.", 64, "Stop sshterm"
+    MsgBox "The xterm service is not running.", 64, "Stop xterm"
   End If
   WScript.Quit 0
 End If
@@ -28,9 +28,9 @@ On Error GoTo 0
 
 If http.Status <> 200 Then
   If isDryRun Then
-    WScript.Echo "sshterm launcher-info returned HTTP " & http.Status & "."
+    WScript.Echo "xterm launcher-info returned HTTP " & http.Status & "."
   Else
-    MsgBox "Could not verify the service on port 8787. No process was stopped.", 48, "Stop sshterm"
+    MsgBox "Could not verify the service on port 8787. No process was stopped.", 48, "Stop xterm"
   End If
   WScript.Quit 1
 End If
@@ -39,12 +39,12 @@ body = CStr(http.ResponseText)
 Set re = New RegExp
 re.Global = False
 re.IgnoreCase = False
-re.Pattern = """app""\s*:\s*""sshterm"""
+re.Pattern = """app""\s*:\s*""xterm"""
 If Not re.Test(body) Then
   If isDryRun Then
-    WScript.Echo "Port 8787 is not the verified sshterm service."
+    WScript.Echo "Port 8787 is not the verified xterm service."
   Else
-    MsgBox "The service on port 8787 is not sshterm. No process was stopped.", 48, "Stop sshterm"
+    MsgBox "The service on port 8787 is not xterm. No process was stopped.", 48, "Stop xterm"
   End If
   WScript.Quit 1
 End If
@@ -55,20 +55,20 @@ If matches.Count <> 1 Then
   If isDryRun Then
     WScript.Echo "The verified service did not return a valid PID."
   Else
-    MsgBox "The verified sshterm service did not return a valid PID. No process was stopped.", 48, "Stop sshterm"
+    MsgBox "The verified xterm service did not return a valid PID. No process was stopped.", 48, "Stop xterm"
   End If
   WScript.Quit 1
 End If
 processId = CLng(matches(0).SubMatches(0))
 
 If isDryRun Then
-  WScript.Echo "Verified sshterm PID: " & processId
+  WScript.Echo "Verified xterm PID: " & processId
   WScript.Quit 0
 End If
 
 If Not isConfirmed Then
-  If MsgBox("Stop the sshterm background service (PID " & processId & ")?" & vbCrLf & _
-      "Active SSH, VNC, and file-transfer connections will be disconnected.", 49, "Stop sshterm") <> 1 Then
+  If MsgBox("Stop the xterm background service (PID " & processId & ")?" & vbCrLf & _
+      "Active SSH, VNC, and file-transfer connections will be disconnected.", 49, "Stop xterm") <> 1 Then
     WScript.Quit 0
   End If
 End If
@@ -91,13 +91,13 @@ End If
 On Error GoTo 0
 
 If Not found Then
-  MsgBox "The sshterm service has already stopped.", 64, "Stop sshterm"
+  MsgBox "The xterm service has already stopped.", 64, "Stop xterm"
   WScript.Quit 0
 End If
 
 If result = 0 Then
   WScript.Sleep 500
-  MsgBox "The sshterm background service has stopped." & vbCrLf & "Double-click launcher.vbs to start it again.", 64, "Stop sshterm"
+  MsgBox "The xterm background service has stopped." & vbCrLf & "Double-click launcher.vbs to start it again.", 64, "Stop xterm"
   WScript.Quit 0
 End If
 
@@ -107,11 +107,11 @@ If result = 2 And Not isElevated Then
   On Error Resume Next
   shellApp.ShellExecute "wscript.exe", """" & WScript.ScriptFullName & """ /elevated /confirmed", "", "runas", 1
   If Err.Number <> 0 Then
-    MsgBox "Could not request administrator access. The sshterm service was not stopped.", 16, "Stop sshterm"
+    MsgBox "Could not request administrator access. The xterm service was not stopped.", 16, "Stop xterm"
   End If
   On Error GoTo 0
   WScript.Quit 0
 End If
 
-MsgBox "Could not stop the sshterm service (error " & result & "). Run stop.vbs as administrator.", 16, "Stop sshterm"
+MsgBox "Could not stop the xterm service (error " & result & "). Run stop.vbs as administrator.", 16, "Stop xterm"
 WScript.Quit 1

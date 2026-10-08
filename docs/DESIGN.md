@@ -1,6 +1,6 @@
 > **归档说明（2026-09-11）**：本文是 2026-08-04 架构评审时的设计快照，**不再作为现行功能清单**。请以 [`STATUS.md`](STATUS.md)、[`ARCHITECTURE.md`](ARCHITECTURE.md)、[`FEATURE-PLAN.md`](FEATURE-PLAN.md) 与仓库根 `README.md` 为准。下文「密码明文 JSON」「仅 Tauri 套壳」等表述已过时。
 
-# sshterm — SSH / Telnet / 串口 多标签连接工具
+# xterm — SSH / Telnet / 串口 多标签连接工具
 
 > 最终设计文档 v2.0 | 2026-08-04 | 架构评审通过 ✅
 
@@ -42,7 +42,7 @@ Windows 上轻量、快速、稳定的多协议连接工具:SSH / Telnet / 串�
 │  ├─ ssh    : ssh2 (密码/密钥)                 │
 │  ├─ telnet : net socket (IAC 协商+自动登录)    │
 │  └─ serial : serialport (全参数)              │
-│  会话持久化: %USERPROFILE%\.sshterm\sessions.json
+│  会话持久化: %USERPROFILE%\.xterm\sessions.json
 └─────────────────────────────────────────────┘
 ```
 
@@ -60,7 +60,7 @@ Windows 上轻量、快速、稳定的多协议连接工具:SSH / Telnet / 串�
 ## 6. 文件结构
 
 ```
-sshterm/
+xterm/
 ├── run.bat              启动脚本 (查 Node → 装依赖 → 起服务 → 开浏览器)
 ├── README.md            使用说明
 ├── package.json         依赖: ssh2 / serialport / ws / @xterm/xterm / @xterm/addon-fit
