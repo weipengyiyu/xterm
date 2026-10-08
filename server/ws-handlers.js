@@ -21,6 +21,8 @@ function createWsMessageHandler(ctx) {
     const doConnect = (...args) => ctx.doConnect(...args);
     const attachExistingConnection = (...args) => ctx.attachExistingConnection(...args);
     const sendConnectionData = (...args) => ctx.sendConnectionData(...args);
+    const holdOutputs = (...args) => ctx.holdOutputs(...args);
+    const releaseOutputs = (...args) => ctx.releaseOutputs(...args);
     const getConnection = (...args) => ctx.getConnection(...args);
     const connections = ctx.connections;
     const connectionKey = ctx.connectionKey;
@@ -49,6 +51,22 @@ function createWsMessageHandler(ctx) {
     }
     case 'list': {
       send(ws, { type: 'sessions', list: sessionsList() });
+      break;
+    }
+    case 'output-hold': {
+      holdOutputs(ws);
+      break;
+    }
+    case 'output-release': {
+      releaseOutputs(ws);
+      break;
+    }
+    case 'local-shells': {
+      const { listShells } = require('./local-shells');
+      send(ws, {
+        type: 'local-shells',
+        shells: listShells().map(({ id, label, available }) => ({ id, label, available })),
+      });
       break;
     }
     // 前端每隔几秒请求一次远端主机状态 (内存/负载/主机名); 断开即停, 无需服务端定时器

@@ -9,7 +9,7 @@ const os = require('os');
 const { randomUUID, randomBytes, createHash } = require('crypto');
 const { WebSocketServer } = require('ws');
 const { decodeBuffer, StreamingDecoder } = require('./encoding');
-const { sendBinary, WS_HIGH_WATER, attachWsBackpressure, queueDepth, isBackedUp } = require('./ws-backpressure');
+const { sendBinary, WS_HIGH_WATER, attachWsBackpressure, detachWsBackpressure, queueDepth, isBackedUp } = require('./ws-backpressure');
 const sshConnectScheduler = require('./ssh-connect-scheduler');
 const { createSecurity } = require('./security');
 const { createLogging } = require('./logging');
@@ -262,14 +262,40 @@ function bufferConnectionHistory(conn, data) {
   }
 }
 
+function pausableIo(conn) {
+  if (conn.stream && typeof conn.stream.pause === 'function') return conn.stream;
+  if (conn.sock && typeof conn.sock.pause === 'function') return conn.sock;
+  if (conn.sp && typeof conn.sp.pause === 'function') return conn.sp;
+  return null;
+}
+
+function pauseProducer(conn) {
+  if (!conn || conn._outputPaused) return;
+  const io = pausableIo(conn);
+  if (!io) return;
+  conn._outputPaused = true;
+  conn._pausedIo = io;
+  try { io.pause(); } catch { conn._outputPaused = false; conn._pausedIo = null; }
+}
+
+function holdOutputs(ws) {
+  ws._clientHold = true;
+  for (const [key, conn] of connections) {
+    if (!key.startsWith(`${ws.windowId}:`) || conn.ownerWs !== ws) continue;
+    pauseProducer(conn);
+  }
+}
+
+function releaseOutputs(ws) {
+  ws._clientHold = false;
+  resumePausedConnections(ws);
+}
+
 function sendConnectionData(conn, id, data) {
   bufferConnectionHistory(conn, data);
   const ownerWs = conn.ownerWs;
   if (!ownerWs || ownerWs.readyState !== 1) return;
-  if (isBackedUp(ownerWs) && conn.stream && typeof conn.stream.pause === 'function' && !conn._outputPaused) {
-    conn._outputPaused = true;
-    try { conn.stream.pause(); } catch {}
-  }
+  if ((ownerWs._clientHold || isBackedUp(ownerWs)) && !conn._outputPaused) pauseProducer(conn);
   sendBinary(ownerWs, id, data);
 }
 
@@ -299,7 +325,8 @@ async function doConnect(ws, cfg, tabId) {
 
   const ConnCls = { ssh: require('./connections/ssh'),
                     telnet: require('./connections/telnet'),
-                    serial: require('./connections/serial') }[cfg.type];
+                    serial: require('./connections/serial'),
+                    local: require('./connections/local') }[cfg.type];
   if (!ConnCls) return send(ws, { type: 'error', id: tabId, msg: `未知协议: ${cfg.type}` });
 
   const conn = new ConnCls(cfg);
@@ -428,6 +455,8 @@ const handle = createWsMessageHandler({
   doConnect,
   attachExistingConnection,
   sendConnectionData,
+  holdOutputs,
+  releaseOutputs,
   getConnection,
   connections,
   connectionKey,
@@ -458,6 +487,7 @@ wss.on('connection', (ws, req) => {
   pingTimer.unref();
   ws.on('close', () => {
     clearInterval(pingTimer);
+    detachWsBackpressure(ws);
     wsCount--;
     scheduleIdleExit();
     if (windows.get(ws.windowId) === ws) {

@@ -8,6 +8,7 @@ function attachWsBackpressure(ws, onLowWater) {
   if (!ws || ws._backpressureAttached) return;
   ws._backpressureAttached = true;
   ws._outboundQueue = [];
+  ws._droppedFrames = ws._droppedFrames || 0;
   ws._onLowWater = typeof onLowWater === 'function' ? onLowWater : null;
   ws._outboundTimer = setInterval(() => {
     if (ws.readyState !== 1 || !ws._outboundQueue.length) return;
@@ -16,11 +17,24 @@ function attachWsBackpressure(ws, onLowWater) {
   ws._outboundTimer.unref?.();
 }
 
+function detachWsBackpressure(ws) {
+  if (!ws || !ws._backpressureAttached) return;
+  if (ws._outboundTimer) clearInterval(ws._outboundTimer);
+  ws._outboundTimer = null;
+  ws._outboundQueue = [];
+  ws._backpressureAttached = false;
+}
+
 function sendBinary(ws, id, data) {
   if (!ws || ws.readyState !== 1) return false;
   attachWsBackpressure(ws);
-  if (ws._outboundQueue.length >= WS_MAX_QUEUE_ITEMS) return false;
   const chunk = Buffer.from(data);
+  // Keep the newest terminal output. Dropping the tail freezes the view on
+  // stale frames while a fast producer (serial / SSH flood) is still running.
+  while (ws._outboundQueue.length >= WS_MAX_QUEUE_ITEMS) {
+    ws._outboundQueue.shift();
+    ws._droppedFrames = (ws._droppedFrames || 0) + 1;
+  }
   ws._outboundQueue.push({ id, data: chunk });
   drainWsQueue(ws);
   return true;
@@ -55,7 +69,9 @@ function isBackedUp(ws) {
 module.exports = {
   WS_HIGH_WATER,
   WS_LOW_WATER,
+  WS_MAX_QUEUE_ITEMS,
   attachWsBackpressure,
+  detachWsBackpressure,
   sendBinary,
   queueDepth,
   isBackedUp,

@@ -7,8 +7,8 @@ const ALLOWED = [
   'autoLogin', 'loginUser', 'reconnect', 'sortOrder', 'proxyJump', 'readyTimeout',
   'encoding', 'baudRate', 'dataBits', 'stopBits', 'parity', 'flowControl',
   'tunnels', 'proxy', 'jumpAuth', 'agentForward',
-  'group', 'autoCmds', 'rtscts', 'hexMode', 'timestamp', 'trigger', 'viewOnly',
-  'connect', 'readonly', 'replay', 'sessionLog',
+  'group', 'autoCmds', 'rtscts', 'hexMode', 'timestamp', 'trigger', 'viewOnly', 'newline',
+  'connect', 'readonly', 'replay', 'sessionLog', 'shell', 'cwd',
 ];
 
 function sanitizeSession(s) {
@@ -17,11 +17,22 @@ function sanitizeSession(s) {
   for (const key of Object.keys(out)) {
     if (!ALLOWED.includes(key)) delete out[key];
   }
-  if (!['ssh', 'telnet', 'vnc', 'serial'].includes(out.type)) return null;
+  if (!['ssh', 'telnet', 'vnc', 'serial', 'local'].includes(out.type)) return null;
   out.name = String(out.name || '').trim().slice(0, 120);
   if (!out.name) return null;
 
-  if (out.type === 'serial') {
+  if (out.type === 'local') {
+    delete out.port;
+    delete out.host;
+    delete out.password;
+    delete out.privateKey;
+    out.shell = ['powershell', 'pwsh', 'cmd', 'wsl', 'git-bash'].includes(out.shell) ? out.shell : 'powershell';
+    if (out.cwd !== undefined) {
+      out.cwd = String(out.cwd || '').trim().slice(0, 260);
+      if (!out.cwd) delete out.cwd;
+    }
+    out.rememberPassword = false;
+  } else if (out.type === 'serial') {
     out.port = String(out.port || '').trim().slice(0, 64);
     if (!out.port) return null;
     if (out.port2 !== undefined) out.port2 = String(out.port2 || '').trim().slice(0, 64);
@@ -42,6 +53,9 @@ function sanitizeSession(s) {
   if (typeof out.rtscts === 'boolean') out.rtscts = !!out.rtscts;
   if (typeof out.hexMode === 'boolean') out.hexMode = !!out.hexMode;
   if (typeof out.timestamp === 'boolean') out.timestamp = !!out.timestamp;
+  if (out.newline !== undefined) {
+    out.newline = ['cr', 'lf', 'crlf'].includes(out.newline) ? out.newline : 'cr';
+  }
   if (typeof out.viewOnly === 'boolean') out.viewOnly = !!out.viewOnly;
   if (typeof out.readonly === 'boolean') out.readonly = !!out.readonly;
   if (typeof out.connect === 'boolean') out.connect = !!out.connect;

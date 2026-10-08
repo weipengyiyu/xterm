@@ -30,6 +30,20 @@ const SearchAddonCtor = (typeof SearchAddon === 'function') ? SearchAddon
   : (window.SearchAddon && window.SearchAddon.SearchAddon);
 const ImageAddonCtor = (typeof ImageAddon === 'function') ? ImageAddon
   : (window.ImageAddon && window.ImageAddon.ImageAddon);
+const WebLinksAddonCtor = (typeof WebLinksAddon === 'function') ? WebLinksAddon
+  : (window.WebLinksAddon && (window.WebLinksAddon.WebLinksAddon || window.WebLinksAddon));
+function bindTerminalExtras(term) {
+  if (!term) return;
+  if (WebLinksAddonCtor) {
+    try { term.loadAddon(new WebLinksAddonCtor()); } catch (e) { /* 链接插件缺失时终端仍可用 */ }
+  }
+  term.onBell(() => {
+    setStatus('终端响铃');
+    document.body.classList.add('term-bell');
+    clearTimeout(bindTerminalExtras._timer);
+    bindTerminalExtras._timer = setTimeout(() => document.body.classList.remove('term-bell'), 700);
+  });
+}
 if (typeof Terminal !== 'function' || !FitAddonCtor) {
   document.body.innerHTML = '<div style="padding:40px;font:14px sans-serif;color:#f87171">' +
     '❌ 终端核心加载失败(xterm.js / addon-fit), 请刷新或检查服务端资源。</div>';
@@ -87,7 +101,43 @@ function handleUserInput(tab, data) {
     }
   }
   tab._inputLine = line;
-  safeSendInput(connId, data, tab.cfg?.encoding);
+  const payload = applySerialNewline(tab.cfg, data);
+  if (!safeSendInput(connId, payload, tab.cfg?.encoding)) return;
+  broadcastInputToOthers(tab, data);
+}
+
+let broadcastInput = false;
+try { broadcastInput = localStorage.getItem('sshterm.broadcast') === '1'; } catch {}
+
+function inputTargetId(target) {
+  return target.connId != null ? target.connId : target.id;
+}
+function terminalInputTargets() {
+  const out = [];
+  for (const tab of tabs) {
+    if (!tab || tab.cfg?.type === 'vnc' || tab.cfg?.type === 'replay' || !tab.term) continue;
+    out.push(tab);
+    for (const pane of tab.extraPanes || []) {
+      if (pane && pane.term) out.push(pane);
+    }
+  }
+  return out;
+}
+function syncBroadcastButton() {
+  const btn = $('btn-broadcast');
+  if (!btn) return;
+  btn.classList.toggle('active', broadcastInput);
+  btn.setAttribute('aria-pressed', broadcastInput ? 'true' : 'false');
+}
+function broadcastInputToOthers(source, data) {
+  if (!broadcastInput || source?._fromBroadcast) return;
+  for (const target of terminalInputTargets()) {
+    if (target === source) continue;
+    if (target.state !== 'connected') continue;
+    const id = inputTargetId(target);
+    if (id == null) continue;
+    sendInput(id, applySerialNewline(target.cfg, data), target.cfg?.encoding);
+  }
 }
 
 function pickDisplayPaths(rest) {
@@ -185,7 +235,8 @@ document.addEventListener('keydown', (e) => {
   }
 }, true);
 
-const TYPE_ICON = { ssh: '🖥️', telnet: '🔌', vnc: '🖼️', serial: '🔗' };
+const TYPE_ICON = { ssh: '🖥️', telnet: '🔌', vnc: '🖼️', serial: '🔗', local: '⌨' };
+let localShells = [];
 const STATE_TEXT = { connecting: '连接中…', connected: '● 已连接', closed: '✕ 已断开' };
 const SENSITIVE_CONFIG_KEYS = new Set(['password', 'privateKey', 'passphrase', 'loginPass']);
 
@@ -287,11 +338,14 @@ function onWsOpen() {
   $('conn-status-text').textContent = '服务器已连接';
   send({ type: 'list' });
   send({ type: 'serialports' });
+  send({ type: 'local-shells' });
   if (tabs.length) reattachLiveTabs();
   else restoreTabs();
 }
 
 function onWsClose(ev) {
+  outputHoldSent = false;
+  drawBusy = false;
   $('conn-status').className = 'status-dot err';
   if (ev && ev.code === 4001) {
     $('conn-status-text').textContent = '页面已刷新，正在恢复…';
@@ -330,57 +384,309 @@ function onWsMessage(ev) {
 }
 connectWebSocket();
 
-function processTerminalOutput(tab, pane, payload) {
-  const term = pane ? pane.term : tab.term;
-  const displayTarget = pane || tab;
-  if (!displayTarget._streamDecoder) {
-    displayTarget._streamDecoder = new (Enc().StreamingDecoder)(tab.cfg.encoding || 'utf-8');
+const DRAW_HOLD_BYTES = 256 * 1024;
+const DRAW_CAP_BYTES = 512 * 1024;
+const DRAW_FRAME_CHARS = 32 * 1024;
+let outputHoldSent = false;
+let drawBusy = false;
+
+function addonCtor(globalName, exportName) {
+  const value = window[globalName];
+  if (typeof value === 'function') return value;
+  if (value && typeof value[exportName] === 'function') return value[exportName];
+  return null;
+}
+function attachCanvasRenderer(term) {
+  const Ctor = addonCtor('CanvasAddon', 'CanvasAddon');
+  if (!Ctor || !term || term._canvasRenderer) return;
+  try {
+    const addon = new Ctor();
+    term.loadAddon(addon);
+    term._canvasRenderer = addon;
+  } catch (e) { /* DOM 渲染仍可用 */ }
+}
+function attachGpuRenderer(term) {
+  if (!term || term._gpuRenderer) return;
+  const Ctor = addonCtor('WebglAddon', 'WebglAddon');
+  if (!Ctor) { attachCanvasRenderer(term); return; }
+  try {
+    const addon = new Ctor();
+    term.loadAddon(addon);
+    term._gpuRenderer = addon;
+    if (typeof addon.onContextLoss === 'function') {
+      addon.onContextLoss(() => {
+        try { addon.dispose(); } catch {}
+        term._gpuRenderer = null;
+        attachCanvasRenderer(term);
+      });
+    }
+  } catch (e) {
+    attachCanvasRenderer(term);
   }
-  const stamp = !pane && tab.cfg.type === 'serial' && tab.cfg.timestamp ? `[${new Date().toLocaleTimeString()}] ` : '';
-  if ((pane ? pane.hex : tab.hex)) term.write(stamp + hexOf(payload) + ' ');
-  else {
-    const text = Enc().decodeBuffer(payload, tab.cfg.encoding || 'utf-8');
-    if (stamp) term.write(stamp);
-    term.write(text);
+}
+function bindOutputFocus(ownerTab, target) {
+  if (!ownerTab || !target) return;
+  const mark = () => {
+    ownerTab._focusTarget = target;
+    scheduleTerminalDraw(target);
+  };
+  const el = target.term && target.term.textarea;
+  if (el) {
+    if (el._outputFocusHandler) el.removeEventListener('focus', el._outputFocusHandler);
+    el._outputFocusHandler = mark;
+    el.addEventListener('focus', el._outputFocusHandler);
   }
-  if (!pane && tab.cfg.type === 'serial' && tab.cfg.trigger) {
-    try {
-      const trigText = Enc().decodeBuffer(payload, tab.cfg.encoding || 'utf-8');
-      if (trigText.includes(tab.cfg.trigger)) setStatus(`串口触发：${tab.cfg.trigger}`);
-    } catch {}
+  const paneHost = target._ownerTab
+    ? target.host
+    : (target.host && target.host.querySelector(':scope > .term-host.main-pane'));
+  if (!paneHost) return;
+  if (paneHost._outputPointerHandler) paneHost.removeEventListener('pointerdown', paneHost._outputPointerHandler);
+  paneHost._outputPointerHandler = mark;
+  paneHost.addEventListener('pointerdown', mark);
+}
+function bindOscTitle(term, target) {
+  if (!term || target == null || typeof term.onTitleChange !== 'function' || term._oscTitleBound) return;
+  term._oscTitleBound = true;
+  term.onTitleChange((title) => {
+    const clean = String(title || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 80);
+    if ((target.oscTitle || '') === clean) return;
+    target.oscTitle = clean;
+    const tab = target._ownerTab || target;
+    if (tabLabel(tab) === tab._shownLabel) return;
+    if (typeof draggingTabId !== 'undefined' && draggingTabId) {
+      tab._titleDirty = true;
+      return;
+    }
+    scheduleTabbarRender();
+  });
+}
+function tabLabel(tab) {
+  const focused = tab._focusTarget;
+  const osc = focused && focused !== tab && focused.oscTitle ? focused.oscTitle : (tab.oscTitle || '');
+  // Local ConPTY OSC titles are usually the exe path; keep the profile name (Tabby-style).
+  if (tab.cfg && tab.cfg.type === 'local' && tab.cfg.name) return tab.cfg.name;
+  if (osc) return osc;
+  return tab.cfg.name || ((TYPE_ICON[tab.cfg.type] || '') + ' ' + (tab.cfg.host || tab.cfg.port || ''));
+}
+let tabbarRaf = 0;
+function scheduleTabbarRender() {
+  if (tabbarRaf) return;
+  tabbarRaf = requestAnimationFrame(() => {
+    tabbarRaf = 0;
+    renderTabbar();
+  });
+}
+function clearTabActivity(tab) {
+  if (!tab || !tab.activity) {
+    if (tab && tab._activityTimer) { clearTimeout(tab._activityTimer); tab._activityTimer = null; }
+    return;
   }
-  if (tab.logging) {
-    const dir = pane || tab;
-    if (!dir.captureParts) dir.captureParts = [];
-    if (!dir.captureSize) dir.captureSize = 0;
-    const line = `${new Date().toISOString()} RX ${hexdumpLine(payload)}\n`;
-    dir.captureParts.push(line);
-    dir.captureSize += line.length;
-    while (dir.captureSize > CAPTURE_MAX && dir.captureParts.length) {
-      const dropped = dir.captureParts.shift();
-      dir.captureSize -= dropped.length;
+  tab.activity = '';
+  if (tab._activityTimer) { clearTimeout(tab._activityTimer); tab._activityTimer = null; }
+}
+function noteTabActivity(tab) {
+  if (!tab || tab.id === activeTabId) return;
+  const was = tab.activity;
+  tab.activity = 'live';
+  if (tab._activityTimer) clearTimeout(tab._activityTimer);
+  tab._activityTimer = setTimeout(() => {
+    tab._activityTimer = null;
+    if (tab.activity !== 'live' || tab.id === activeTabId) return;
+    tab.activity = 'done';
+    scheduleTabbarRender();
+  }, 1500);
+  if (was !== 'live') scheduleTabbarRender();
+}
+function paneHostEl(target) {
+  if (!target) return null;
+  if (target._ownerTab) return target.host || null;
+  return target.host ? target.host.querySelector(':scope > .term-host.main-pane') : null;
+}
+function isDrawTarget(target) {
+  const tab = (target && target._ownerTab) || target;
+  if (!tab || typeof activeTabId === 'undefined' || tab.id !== activeTabId) return false;
+  if (tab.host && tab.host.classList.contains('hidden')) return false;
+  const host = paneHostEl(target);
+  return !(host && host.classList.contains('pane-max-hidden'));
+}
+function scheduleVisibleDraws(tab) {
+  if (!tab || tab.cfg?.type === 'vnc') return;
+  scheduleTerminalDraw(tab);
+  for (const pane of tab.extraPanes || []) scheduleTerminalDraw(pane);
+}
+function signalOutputHold(hold) {
+  if (outputHoldSent === hold) return;
+  outputHoldSent = hold;
+  send({ type: hold ? 'output-hold' : 'output-release' });
+}
+function pendingDrawBytes() {
+  let total = 0;
+  for (const tab of tabs) {
+    if (isDrawTarget(tab) || tab._writing) total += tab._pendingBytes || 0;
+    for (const pane of tab.extraPanes || []) {
+      if (isDrawTarget(pane) || pane._writing) total += pane._pendingBytes || 0;
     }
   }
-  try {
-    const text = displayTarget._streamDecoder.decode(payload);
-    if (!pane && tab.recording) {
-      tab.recording.events.push({ at: Date.now() - tab.recording.startedAt, text });
-      tab.recording.size += text.length;
-      if (tab.recording.events.length > 100000 || tab.recording.size > 8 * 1024 * 1024) {
-        tab.recording.stopped = '录制达到 8 MB / 100,000 条上限';
-        stopSessionRecording(tab);
+  return total;
+}
+function anyTerminalWriting() {
+  for (const tab of tabs) {
+    if (tab._writing) return true;
+    for (const pane of tab.extraPanes || []) if (pane._writing) return true;
+  }
+  return false;
+}
+function pushDrawText(target, text) {
+  if (!text) return;
+  if (!target._pending) target._pending = [];
+  target._pending.push(text);
+  target._pendingBytes = (target._pendingBytes || 0) + text.length;
+  while (target._pendingBytes > DRAW_CAP_BYTES && target._pending.length > 1) {
+    target._pendingBytes -= target._pending.shift().length;
+  }
+}
+function flushTerminalDraw(target) {
+  if (!target || !target.term || target._writing) return;
+  if (!target._pending || !target._pending.length || !isDrawTarget(target)) return;
+  if (drawBusy) {
+    scheduleTerminalDraw(target);
+    return;
+  }
+  let text = target._pending.join('');
+  target._pending = [];
+  target._pendingBytes = 0;
+  const tab = target._ownerTab || target;
+  if (!target._ownerTab && tab.cfg && tab.cfg.type === 'serial' && tab.cfg.timestamp) {
+    text = `[${new Date().toLocaleTimeString()}] ` + text;
+  }
+  if (!target._ownerTab && tab.cfg && tab.cfg.type === 'serial' && tab.cfg.trigger && text.includes(tab.cfg.trigger)) {
+    setStatus(`串口触发：${tab.cfg.trigger}`);
+  }
+  if (text.length > DRAW_FRAME_CHARS) {
+    let cut = DRAW_FRAME_CHARS;
+    const lead = text.charCodeAt(cut - 1);
+    if (lead >= 0xD800 && lead <= 0xDBFF) cut -= 1;
+    const rest = text.slice(cut);
+    text = text.slice(0, cut);
+    target._pending = [rest];
+    target._pendingBytes = rest.length;
+  }
+  const pendingBytes = text.length + (target._pendingBytes || 0);
+  drawBusy = true;
+  target._writing = true;
+  let finished = false;
+  const done = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(target._writeTimer);
+    drawBusy = false;
+    target._writing = false;
+    signalOutputHold(pendingDrawBytes() > DRAW_HOLD_BYTES || anyTerminalWriting());
+    if (target._pending && target._pending.length) scheduleTerminalDraw(target);
+    for (const item of tabs) {
+      if (item !== target && item._pending && item._pending.length) scheduleTerminalDraw(item);
+      for (const pane of item.extraPanes || []) {
+        if (pane !== target && pane._pending && pane._pending.length) scheduleTerminalDraw(pane);
       }
     }
-    const target = pane || tab;
-    if (!target.recParts) target.recParts = [];
-    target.recLen = (target.recLen || 0) + text.length;
-    target.recParts.push(text);
-    target._outputSeq = (target._outputSeq || 0) + 1;
-    while (target.recLen > BUF_MAX && target.recParts.length) {
-      target.recLen -= target.recParts.shift().length;
+  };
+  target._writeTimer = setTimeout(done, 2000);
+  try { target.term.write(text, done); }
+  catch (e) {
+    try { target.term.write(text); } catch {}
+    done();
+  }
+  if (target._writing && (pendingBytes > DRAW_HOLD_BYTES || pendingDrawBytes() > DRAW_HOLD_BYTES)) signalOutputHold(true);
+}
+function scheduleTerminalDraw(target) {
+  if (!target || target._drawRaf || target._writing) return;
+  target._drawRaf = requestAnimationFrame(() => {
+    target._drawRaf = 0;
+    flushTerminalDraw(target);
+  });
+}
+function queueReplay(target, text) {
+  if (!text) return;
+  if (!target._replayQueue) target._replayQueue = [];
+  target._replayQueue.push(text);
+  scheduleTabsSave();
+}
+function commitReplay(target) {
+  const queued = target && target._replayQueue;
+  if (!queued || !queued.length) return;
+  target._replayQueue = [];
+  const text = queued.join('');
+  if (!target.recParts) target.recParts = [];
+  target.recLen = (target.recLen || 0) + text.length;
+  target.recParts.push(text);
+  while (typeof BUF_MAX === 'number' && target.recLen > BUF_MAX && target.recParts.length) {
+    target.recLen -= target.recParts.shift().length;
+  }
+}
+function commitAllReplay() {
+  if (typeof tabs === 'undefined') return;
+  for (const tab of tabs) {
+    commitReplay(tab);
+    for (const pane of tab.extraPanes || []) commitReplay(pane);
+  }
+}
+
+function processTerminalOutput(tab, pane, payload) {
+  const target = pane || tab;
+  if (pane) pane._ownerTab = tab;
+  if (!target._streamDecoder) {
+    target._streamDecoder = new (Enc().StreamingDecoder)(tab.cfg.encoding || 'utf-8');
+  }
+  let text = '';
+  try {
+    text = (pane ? pane.hex : tab.hex) ? hexOf(payload) + ' ' : target._streamDecoder.decode(payload);
+  } catch (e) { return; }
+  if (!text) return;
+  if (!pane && tab.recording) {
+    if (!tab._recordPending) tab._recordPending = [];
+    tab._recordPending.push(text);
+    if (!tab._recordTimer) {
+      tab._recordTimer = setTimeout(() => {
+        tab._recordTimer = null;
+        const chunk = (tab._recordPending || []).join('');
+        tab._recordPending = [];
+        if (!chunk || !tab.recording) return;
+        tab.recording.events.push({ at: Date.now() - tab.recording.startedAt, text: chunk });
+        tab.recording.size += chunk.length;
+        if (tab.recording.events.length > 100000 || tab.recording.size > 8 * 1024 * 1024) {
+          tab.recording.stopped = '录制达到 8 MB / 100,000 条上限';
+          stopSessionRecording(tab);
+        }
+      }, 200);
     }
-    scheduleTabsSave();
-  } catch (e) { /* 忽略 */ }
+  }
+  if (tab.logging) {
+    const dir = target;
+    if (!dir._capturePending) dir._capturePending = [];
+    dir._capturePending.push(payload);
+    if (!dir._captureTimer) {
+      dir._captureTimer = setTimeout(() => {
+        dir._captureTimer = null;
+        const chunks = dir._capturePending || [];
+        dir._capturePending = [];
+        if (!dir.captureParts) dir.captureParts = [];
+        if (!dir.captureSize) dir.captureSize = 0;
+        for (const chunk of chunks) {
+          const line = `${new Date().toISOString()} RX ${hexdumpLine(chunk)}\n`;
+          dir.captureParts.push(line);
+          dir.captureSize += line.length;
+        }
+        while (dir.captureSize > CAPTURE_MAX && dir.captureParts.length) {
+          dir.captureSize -= dir.captureParts.shift().length;
+        }
+      }, 200);
+    }
+  }
+  queueReplay(target, text);
+  pushDrawText(target, text);
+  if (isDrawTarget(target)) scheduleTerminalDraw(target);
+  else noteTabActivity(tab);
+  if (pendingDrawBytes() > DRAW_HOLD_BYTES) signalOutputHold(true);
 }
 
 function send(obj) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); }
@@ -472,6 +778,11 @@ function handleMsg(m) {
         };
       });
       $('sshcfg-dialog-mask').classList.remove('hidden');
+      break;
+    }
+    case 'local-shells': {
+      localShells = Array.isArray(m.shells) ? m.shells : [];
+      renderLocalShells();
       break;
     }
     case 'sessions': {
@@ -679,12 +990,22 @@ const LS_TABS = tabsStorageKey();
 const LS_WORKSPACE = 'sshterm.workspace.default';
 const BUF_MAX = 200 * 1024;   // 每标签保留最近 200KB 输出, 刷新后重放
 let tabsSaveTimer = null;
+let tabsSaveSince = 0;
 function scheduleTabsSave() {
-  clearTimeout(tabsSaveTimer);
+  if (!tabsSaveSince) tabsSaveSince = Date.now();
+  if (tabsSaveTimer) return;
+  const busy = anyTerminalWriting() || pendingDrawBytes() > DRAW_FRAME_CHARS;
+  const delay = busy && Date.now() - tabsSaveSince < 5000 ? 1000 : 800;
   tabsSaveTimer = setTimeout(() => {
     tabsSaveTimer = null;
+    if ((anyTerminalWriting() || pendingDrawBytes() > DRAW_FRAME_CHARS) && Date.now() - tabsSaveSince < 5000) {
+      scheduleTabsSave();
+      return;
+    }
+    tabsSaveSince = 0;
+    commitAllReplay();
     saveTabs();
-  }, 250);
+  }, delay);
 }
 // The 200 KB replay snapshot can end in the middle of an inline image.  Writing
 // a truncated Sixel/OSC/APC payload leaves the xterm parser inside the sequence,
@@ -700,6 +1021,7 @@ function stripTruncatedSequence(text) {
 }
 function saveTabs() {
   try {
+    commitAllReplay();
     localStorage.setItem(tabsStorageKey(), JSON.stringify(tabs.map(t => ({
       id: t.id,
       cfg: configForBrowserStorage(t.cfg),
@@ -708,6 +1030,7 @@ function saveTabs() {
       panes: (t.extraPanes || []).length,
       paneIds: (t.extraPanes || []).map(p => p.connId),
       paneBufs: (t.extraPanes || []).map(p => (p.recParts || []).join('')),
+      paneCfgs: (t.extraPanes || []).map(p => configForBrowserStorage(p.cfg || t.cfg)),
       split: { dir: splitDirection(t), ratio: splitRatio(t) },
       readonly: !!t.readonly,
     }))));
@@ -740,6 +1063,7 @@ function restoreTabItems(list) {
       addPane(tab, split.dir, split.ratio, {
         id: item.paneIds?.[n],
         replay: item.paneBufs?.[n] || '',
+        cfg: item.paneCfgs?.[n],
       });
     }
   }
@@ -841,7 +1165,9 @@ function newTab(cfg, opts = {}) {
       }
     });
   }
+  bindTerminalExtras(term);
   term.open(host);
+  attachGpuRenderer(term);
   setTimeout(() => fitAddon.fit(), 0);
 
   // 主机信息条 (仅 SSH): 终端下方显示远端内存/负载/主机名/连接时长
@@ -851,7 +1177,9 @@ function newTab(cfg, opts = {}) {
     hostinfoBar = document.getElementById(`hostinfo-${id}`);
   }
 
-  const tab = { id, cfg, term, host: container, state: 'idle', hex: !!(opts.hex ?? cfg.hexMode), fitAddon, searchAddon, imageAddon, recParts: [], recLen: 0, extraPanes: [], hostinfoBar, hostinfoTimer: null, connectedAt: 0 };
+  const tab = { id, cfg, term, host: container, state: 'idle', hex: !!(opts.hex ?? cfg.hexMode), fitAddon, searchAddon, imageAddon, recParts: [], recLen: 0, extraPanes: [], hostinfoBar, hostinfoTimer: null, connectedAt: 0, _focusTarget: null, oscTitle: '' };
+  tab._focusTarget = tab;
+  bindOscTitle(term, tab);
   tabs.push(tab);
   renderTabbar();
   activateTab(id);
@@ -870,15 +1198,20 @@ function newTab(cfg, opts = {}) {
   }
   saveTabs();
 
+  bindOutputFocus(tab, tab);
   term.onData((d) => handleUserInput(tab, d));
   term.onResize(({ cols, rows }) => send({ type: 'resize', id, cols, rows }));
 
   // 窗口尺寸变化 → 重新适配（2×2 网格分隔条按比例跟随）
-  const ro = new ResizeObserver(() => {
-    if (activeTabId === id) {
-      fitTerm(tab);
-      if (countPanes(tab) >= 3) positionGridDividers(tab);
-    }
+  let boxW = 0;
+  let boxH = 0;
+  const ro = new ResizeObserver((entries) => {
+    const rect = entries[0] && entries[0].contentRect;
+    if (!rect || activeTabId !== id) return;
+    if (Math.abs(rect.width - boxW) < 2 && Math.abs(rect.height - boxH) < 2) return;
+    boxW = rect.width;
+    boxH = rect.height;
+    scheduleFit(tab);
   });
   ro.observe(container);
   tab._resizeObserver = ro;
@@ -893,6 +1226,18 @@ function newTab(cfg, opts = {}) {
 function fitTerm(tab) {
   if (!tab?.fitAddon) return;
   try { tab.fitAddon.fit(); } catch (e) { /* 忽略 */ }
+}
+function scheduleFit(tab) {
+  if (!tab || tab._fitRaf) return;
+  tab._fitRaf = requestAnimationFrame(() => {
+    tab._fitRaf = 0;
+    if (!tab.host || tab.host.classList.contains('hidden') || activeTabId !== tab.id) return;
+    fitTerm(tab);
+    for (const pane of tab.extraPanes || []) {
+      try { pane.fitAddon?.fit(); } catch {}
+    }
+    if (countPanes(tab) >= 3) positionGridDividers(tab);
+  });
 }
 
 function syncTerminalSize(target, id) {
@@ -958,11 +1303,20 @@ function doCloseTab(id) {
 
 function activateTab(id) {
   activeTabId = id;
+  const opened = tabs.find(t => t.id === id);
+  clearTabActivity(opened);
+  const maxBtn = $('btn-pane-max');
+  if (maxBtn) maxBtn.classList.toggle('on', !!(opened && opened._maximized));
   for (const t of tabs) {
     t.host.classList.toggle('hidden', t.id !== id);
     if (t.id === id) setTimeout(() => {
       if (t.cfg.type === 'vnc') { try { t.rfb?.focus(); } catch {} }
-      else { fitTerm(t); t.term?.focus(); }
+      else {
+        scheduleFit(t);
+        scheduleVisibleDraws(t);
+        const focus = t._focusTarget && t._focusTarget.term ? t._focusTarget : t;
+        try { focus.term.focus(); } catch {}
+      }
     }, 0);
   }
   renderTabbar();
@@ -1023,8 +1377,8 @@ function moveOpenTab(dragId, targetId, after = false) {
 }
 
 function clearTabDropTargets() {
-  document.querySelectorAll('.tab.dragging, .tab.drop-before, .tab.drop-after')
-    .forEach(el => el.classList.remove('dragging', 'drop-before', 'drop-after'));
+  document.querySelectorAll('.tab.dragging, .tab.drop-before, .tab.drop-after, .tab.drop-merge')
+    .forEach(el => el.classList.remove('dragging', 'drop-before', 'drop-after', 'drop-merge'));
 }
 
 function renderTabbar() {
@@ -1035,9 +1389,12 @@ function renderTabbar() {
     el.className = 'tab' + (t.id === activeTabId ? ' active' : '');
     el.draggable = true;
     const dot = t.state === 'connected' ? '🟢' : t.state === 'connecting' ? '🟡' : '🔴';
+    const activity = t.id === activeTabId ? '' : (t.activity || '');
     el.innerHTML = `
       <span class="t-state" title="${esc(t.stateMsg || '')}">${dot}</span>
-      <span class="t-name">${esc(t.cfg.name || (TYPE_ICON[t.cfg.type] + ' ' + (t.cfg.host || t.cfg.port)))}</span>
+      <span class="t-name">${esc(tabLabel(t))}</span>
+      ${activity === 'live' ? '<span class="t-activity" title="有新输出"></span>' : ''}
+      ${activity === 'done' ? '<span class="t-activity done" title="输出已停">完成</span>' : ''}
       <span class="t-close">✕</span>`;
     el.querySelector('.t-close').onclick = (e) => { e.stopPropagation(); requestCloseTab(t.id); };
     el.onclick = () => activateTab(t.id);
@@ -1055,23 +1412,36 @@ function renderTabbar() {
     el.addEventListener('dragover', (e) => {
       if (!draggingTabId || draggingTabId === t.id) return;
       e.preventDefault();
-      const after = e.clientX > el.getBoundingClientRect().left + el.offsetWidth / 2;
-      el.classList.toggle('drop-before', !after);
-      el.classList.toggle('drop-after', after);
+      const rect = el.getBoundingClientRect();
+      const x = rect.width ? (e.clientX - rect.left) / rect.width : 0.5;
+      el.classList.toggle('drop-before', x < 0.28);
+      el.classList.toggle('drop-after', x > 0.72);
+      el.classList.toggle('drop-merge', x >= 0.28 && x <= 0.72);
       e.dataTransfer.dropEffect = 'move';
     });
-    el.addEventListener('dragleave', () => el.classList.remove('drop-before', 'drop-after'));
+    el.addEventListener('dragleave', () => el.classList.remove('drop-before', 'drop-after', 'drop-merge'));
     el.addEventListener('drop', (e) => {
       if (!draggingTabId || draggingTabId === t.id) return;
       e.preventDefault();
       e.stopPropagation();
-      const after = e.clientX > el.getBoundingClientRect().left + el.offsetWidth / 2;
-      moveOpenTab(draggingTabId, t.id, after);
+      const rect = el.getBoundingClientRect();
+      const x = rect.width ? (e.clientX - rect.left) / rect.width : 0.5;
+      if (x >= 0.28 && x <= 0.72) {
+        const source = tabs.find(item => item.id === draggingTabId);
+        mergeTabInto(t, source, 'right');
+      } else {
+        moveOpenTab(draggingTabId, t.id, x > 0.72);
+      }
     });
     el.addEventListener('dragend', () => {
       draggingTabId = null;
       clearTabDropTargets();
+      if (tabs.some(item => item._titleDirty)) {
+        for (const item of tabs) item._titleDirty = false;
+        renderTabbar();
+      }
     });
+    t._shownLabel = tabLabel(t);
     bar.appendChild(el);
   }
   if (!tabs.length) $('tabbar').innerHTML = '<span class="muted" style="padding:8px 12px">无连接 — 双击左侧会话或新建</span>';
@@ -1328,8 +1698,12 @@ function openDlg(existing = null) {
   $('s-rtscts').checked = !!existing?.rtscts;
   $('s-reconnect').checked = existing?.reconnect !== false;
   $('s-hex').checked = !!existing?.hexMode;
+  $('s-newline').value = ['cr', 'lf', 'crlf'].includes(existing?.newline) ? existing.newline : 'cr';
   $('s-timestamp').checked = !!existing?.timestamp;
   $('s-trigger').value = existing?.trigger || '';
+  if ($('l-shell') && existing?.shell) $('l-shell').value = existing.shell;
+  $('l-cwd').value = existing?.cwd || '';
+  $('l-reconnect').checked = !!existing?.reconnect;
   updateDlgFields();
   $('dlg-mask').classList.remove('hidden');
   $('f-name').focus();
@@ -1341,7 +1715,9 @@ function updateDlgFields() {
   $('grp-telnet').classList.toggle('hidden', type !== 'telnet');
   $('grp-vnc').classList.toggle('hidden', type !== 'vnc');
   $('grp-serial').classList.toggle('hidden', type !== 'serial');
+  $('grp-local').classList.toggle('hidden', type !== 'local');
   $('f-remember-wrap').classList.toggle('hidden', type === 'serial');
+  $('f-remember-label')?.classList.toggle('hidden', type === 'local');
   $('grp-autocmds').classList.toggle('hidden', type === 'vnc' || type === 'serial');
   const auth = $('f-auth').value;
   $('f-pwd-wrap').classList.toggle('hidden', auth !== 'password' && auth !== 'keyboard-interactive');
@@ -1402,6 +1778,13 @@ function collectDlg() {
       loginUser: $('t-user').value.trim() || undefined,
       loginPass: $('t-pass').value || undefined,
     });
+  } else if (type === 'local') {
+    Object.assign(base, {
+      shell: $('l-shell').value || 'powershell',
+      cwd: $('l-cwd').value.trim() || undefined,
+      reconnect: $('l-reconnect').checked,
+    });
+    base.rememberPassword = false;
   } else if (type === 'vnc') {
     Object.assign(base, {
       host: $('v-host').value.trim(),
@@ -1421,6 +1804,7 @@ function collectDlg() {
       rtscts: $('s-rtscts').checked,
       reconnect: $('s-reconnect').checked,
       hexMode: $('s-hex').checked,
+      newline: $('s-newline').value || 'cr',
       timestamp: $('s-timestamp').checked,
       trigger: $('s-trigger').value.trim() || undefined,
     });
@@ -1692,6 +2076,16 @@ function runAutoCmds(cfg, tabId) {
   runCommandScript(tab, all);
 }
 
+syncBroadcastButton();
+$('btn-broadcast').onclick = () => {
+  broadcastInput = !broadcastInput;
+  try { localStorage.setItem('sshterm.broadcast', broadcastInput ? '1' : '0'); } catch {}
+  syncBroadcastButton();
+  const n = terminalInputTargets().filter(t => t.state === 'connected').length;
+  setStatus(broadcastInput
+    ? `同步输入已开启（当前 ${n} 个已连接终端）`
+    : '同步输入已关闭');
+};
 $('btn-cmds').onclick = () => {
   const tab = tabs.find(t => t.id === activeTabId);
   cmdKey = sessionCmdKey(tab ? tab.cfg : null);
@@ -1848,6 +2242,56 @@ function exportVisibleLogs() {
 // ---------- SSH 隧道 UI → web/js/tunnel-ui.js ----------
 // ---------- VNC 独立会话标签 → web/js/vnc-ui.js ----------
 // ---------- 事件绑定 ----------
+function renderLocalShells() {
+  const available = localShells.filter(s => s.available);
+  const sel = $('l-shell');
+  if (sel) {
+    const current = sel.value || 'powershell';
+    const options = available.length ? available : localShells;
+    sel.innerHTML = options.map(s =>
+      `<option value="${esc(s.id)}"${s.available ? '' : ' disabled'}>${esc(s.label)}</option>`).join('')
+      || '<option value="powershell">PowerShell</option>';
+    if ([...sel.options].some(o => o.value === current)) sel.value = current;
+  }
+  const menu = $('menu-local');
+  if (!menu) return;
+  menu.innerHTML = '';
+  const items = available.length ? available : [];
+  if (!items.length) {
+    const empty = document.createElement('button');
+    empty.type = 'button';
+    empty.disabled = true;
+    empty.textContent = '没有检测到本机 Shell';
+    menu.appendChild(empty);
+    return;
+  }
+  for (const shell of items) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = shell.label;
+    button.onclick = (e) => {
+      e.stopPropagation();
+      menu.classList.add('hidden');
+      openLocalShell(shell.id);
+    };
+    menu.appendChild(button);
+  }
+}
+function openLocalShell(shellId) {
+  const shell = localShells.find(s => s.id === shellId);
+  newTab({
+    name: shell ? shell.label : '本地终端',
+    type: 'local',
+    shell: shellId,
+    reconnect: false,
+  });
+}
+$('btn-local').onclick = (e) => {
+  e.stopPropagation();
+  $('menu-more')?.classList.add('hidden');
+  $('menu-local').classList.toggle('hidden');
+  if (!localShells.length) send({ type: 'local-shells' });
+};
 $('btn-new').onclick = () => openDlg();
 $('btn-welcome-new').onclick = () => openDlg();
 // ---------- 更多工具下拉 (日志/语言/定时/扫描) ----------
@@ -1855,7 +2299,10 @@ $('btn-more').onclick = (e) => {
   e.stopPropagation();
   $('menu-more').classList.toggle('hidden');
 };
-document.addEventListener('click', () => $('menu-more').classList.add('hidden'));
+document.addEventListener('click', () => {
+  $('menu-more').classList.add('hidden');
+  $('menu-local')?.classList.add('hidden');
+});
 $('mi-log').onclick = () => { $('menu-more').classList.add('hidden'); openLogPanel(); };
 $('mi-lang').onclick = () => { $('menu-more').classList.add('hidden'); toggleLang(); };
 $('mi-timer').onclick = () => {
