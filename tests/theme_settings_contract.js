@@ -34,8 +34,8 @@ const sandbox = {
     getElementById() { return null; },
   },
 };
-sandbox.window.Sshterm = {};
-vm.runInNewContext(themeMod + '\nthis.Sshterm = window.Sshterm; this.loadTerminalSettings = loadTerminalSettings; this.getTerminalOptions = getTerminalOptions; this.BUILTIN_THEMES = BUILTIN_THEMES; this.saveTerminalSettings = saveTerminalSettings;', sandbox);
+sandbox.window.Xterm = {};
+vm.runInNewContext(themeMod + '\nthis.Xterm = window.Xterm; this.loadTerminalSettings = loadTerminalSettings; this.getTerminalOptions = getTerminalOptions; this.BUILTIN_THEMES = BUILTIN_THEMES; this.saveTerminalSettings = saveTerminalSettings;', sandbox);
 
 assert(sandbox.BUILTIN_THEMES['tokyo-night'], 'tokyo-night theme definition missing');
 assert(sandbox.BUILTIN_THEMES['solarized-dark'], 'solarized-dark theme definition missing');

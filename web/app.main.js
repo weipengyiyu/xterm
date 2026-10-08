@@ -1,13 +1,13 @@
-// sshterm frontend main glue — edit web/js/* + this file; run node scripts/sync-web-app.js
+// xterm frontend main glue — edit web/js/* + this file; run node scripts/sync-web-app.js
 // AUTO note: web/app.js is the concat artifact used by tests and (optionally) a single-bundle load.
 
-// sshterm 前端: 多标签终端 + 会话管理
+// xterm 前端: 多标签终端 + 会话管理
 /* global Terminal, WebSocket */
 
 // ---------- 工具 ----------
 // $ is defined in web/js/dom.js (loaded first)
 const hexOf = (u8) => Array.from(u8).map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase();
-const Enc = () => window.SshtermEncoding || {
+const Enc = () => window.XtermEncoding || {
   encodeText: (s) => new TextEncoder().encode(s),
   decodeBuffer: (u8, enc) => new TextDecoder(enc || 'utf-8', { fatal: false }).decode(u8),
   StreamingDecoder: class { constructor(enc) { this.dec = new TextDecoder(enc || 'utf-8', { fatal: false }); } decode(c) { return this.dec.decode(c, { stream: true }); } },
@@ -107,7 +107,7 @@ function handleUserInput(tab, data) {
 }
 
 let broadcastInput = false;
-try { broadcastInput = localStorage.getItem('sshterm.broadcast') === '1'; } catch {}
+try { broadcastInput = localStorage.getItem('xterm.broadcast') === '1'; } catch {}
 
 function inputTargetId(target) {
   return target.connId != null ? target.connId : target.id;
@@ -193,9 +193,9 @@ async function displaySequence(tab, connId, paths) {
 function showDisplayPrompt() {
   const tab = tabs.find(t => t.id === activeTabId);
   if (!tab || tab.cfg.type !== 'ssh' || !tab.imageAddon) return;
-  if (document.getElementById('sshterm-display-prompt')) return;
+  if (document.getElementById('xterm-display-prompt')) return;
   const overlay = document.createElement('div');
-  overlay.id = 'sshterm-display-prompt';
+  overlay.id = 'xterm-display-prompt';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;font-family:Consolas,monospace';
   const box = document.createElement('div');
   box.style.cssText = 'background:#1a1b26;border:1px solid #3b4261;border-radius:8px;padding:16px 18px;min-width:440px;box-shadow:0 8px 30px rgba(0,0,0,.5)';
@@ -257,8 +257,8 @@ function configForBrowserStorage(cfg) {
 }
 
 // ---------- 全局状态 ----------
-let clientToken = window.__SSHTERM_TOKEN || '';
-const WINDOW_ID_KEY = 'sshterm.window.id';
+let clientToken = window.__XTERM_TOKEN || '';
+const WINDOW_ID_KEY = 'xterm.window.id';
 function persistentWindowId() {
   try {
     let id = sessionStorage.getItem(WINDOW_ID_KEY) || '';
@@ -296,7 +296,7 @@ async function refreshBootstrapToken() {
     const resp = await fetch('/bootstrap.js', { cache: 'no-store' });
     if (!resp.ok) return false;
     const text = await resp.text();
-    const match = text.match(/window\.__SSHTERM_TOKEN=(.+?);/);
+    const match = text.match(/window\.__XTERM_TOKEN=(.+?);/);
     if (!match) return false;
     clientToken = JSON.parse(match[1]);
     return true;
@@ -804,7 +804,7 @@ function handleMsg(m) {
       break;
     }
     case 'session-export': {
-      saveBlob(new Blob([m.data], { type: 'application/json;charset=utf-8' }), m.filename || 'sshterm-backup.json');
+      saveBlob(new Blob([m.data], { type: 'application/json;charset=utf-8' }), m.filename || 'xterm-backup.json');
       setStatus('加密会话备份已导出');
       break;
     }
@@ -931,10 +931,12 @@ function handleMsg(m) {
     }
     case 'scan': {
       renderScan(m);
+      setStatus(m.open && m.open.length ? `${m.host} 开放 ${m.open.length} 个端口` : `${m.host} 未发现开放端口`);
       break;
     }
     case 'scan-net': {
       renderScanNet(m);
+      setStatus(m.hosts && m.hosts.length ? `发现 ${m.hosts.length} 台设备` : '未发现存活设备');
       break;
     }
     case 'zmodem': {
@@ -982,10 +984,10 @@ function handleMsg(m) {
 // ---------- 国际化 → web/js/i18n.js ----------
 
 // ---------- 标签持久化 (刷新页面自动恢复打开的会话 + 终端内容) ----------
-const LS_TABS_PREFIX = 'sshterm.tabs.';
+const LS_TABS_PREFIX = 'xterm.tabs.';
 function tabsStorageKey() { return LS_TABS_PREFIX + windowId; }
 const LS_TABS = tabsStorageKey();
-const LS_WORKSPACE = 'sshterm.workspace.default';
+const LS_WORKSPACE = 'xterm.workspace.default';
 const BUF_MAX = 200 * 1024;   // 每标签保留最近 200KB 输出, 刷新后重放
 let tabsSaveTimer = null;
 let tabsSaveSince = 0;
@@ -1299,10 +1301,19 @@ function doCloseTab(id) {
   log(`关闭会话「${tab.cfg.name || id}」`);
 }
 
+function syncCaptureRecordMenu() {
+  const tab = (typeof tabs !== 'undefined') ? tabs.find(t => t.id === activeTabId) : null;
+  const capture = $('mi-capture');
+  const record = $('mi-record');
+  if (capture) capture.textContent = tab?.logging ? '⏹ 停止并保存抓包' : '⏺ 开始原始抓包';
+  if (record) record.textContent = tab?.recording ? '⏹ 停止并导出录制' : '⏺ 开始会话录制';
+}
+
 function activateTab(id) {
   activeTabId = id;
   const opened = tabs.find(t => t.id === id);
   clearTabActivity(opened);
+  syncCaptureRecordMenu();
   const maxBtn = $('btn-pane-max');
   if (maxBtn) maxBtn.classList.toggle('on', !!(opened && opened._maximized));
   for (const t of tabs) {
@@ -1872,7 +1883,7 @@ $('search-close').onclick = closeSearch;
 
 // ---------- SFTP 面板宽度调节 → web/js/sftp-panel.js ----------
 // ---------- 可调节侧栏与 SFTP 双栏 ----------
-const SIDEBAR_WIDTH_STORAGE = 'sshterm.sidebarWidth';
+const SIDEBAR_WIDTH_STORAGE = 'xterm.sidebarWidth';
 const SIDEBAR_MIN_WIDTH = 180;
 
 function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
@@ -1954,7 +1965,7 @@ $('btn-tm-stop').onclick = () => { stopTimer(); $('dlg-timer-mask').classList.ad
 function stopTimer() { if (_timerHandle) { clearInterval(_timerHandle); _timerHandle = null; _timerTargetId = null; } }
 
 // ---------- 快捷命令 (Xshell 命令集: 按 IP 独立, 可连接时自动执行) ----------
-// 存储: localStorage['sshterm.commands.<ip>'] = { auto: bool, items: [{name, cmd}] }
+// 存储: localStorage['xterm.commands.<ip>'] = { auto: bool, items: [{name, cmd}] }
 function sessionCmdKey(cfg) {
   // 命令集按 IP (host) 隔离: 同一 IP 的所有会话共享
   return (cfg && cfg.host) || 'default';
@@ -1963,14 +1974,14 @@ let cmdKey = 'default';
 let cmdSet = { auto: false, items: [] };
 function loadCommands() {
   try {
-    const raw = localStorage.getItem('sshterm.commands.' + cmdKey);
+    const raw = localStorage.getItem('xterm.commands.' + cmdKey);
     const d = JSON.parse(raw || '[]');
     if (Array.isArray(d)) cmdSet = { auto: false, items: d };   // 兼容旧格式
     else cmdSet = { auto: !!d.auto, items: Array.isArray(d.items) ? d.items : [] };
   } catch (e) { cmdSet = { auto: false, items: [] }; }
 }
 function saveCommands() {
-  try { localStorage.setItem('sshterm.commands.' + cmdKey, JSON.stringify(cmdSet)); } catch (e) {}
+  try { localStorage.setItem('xterm.commands.' + cmdKey, JSON.stringify(cmdSet)); } catch (e) {}
 }
 function renderCommands() {
   const el = $('cmd-list');
@@ -2062,7 +2073,7 @@ function runAutoCmds(cfg, tabId) {
   // 1. IP 命令集 (auto 开启)
   const ipCmds = [];
   try {
-    const d = JSON.parse(localStorage.getItem('sshterm.commands.' + (cfg.host || '')) || '[]');
+    const d = JSON.parse(localStorage.getItem('xterm.commands.' + (cfg.host || '')) || '[]');
     const set = Array.isArray(d) ? { auto: false, items: d } : d;
     if (set.auto && Array.isArray(set.items)) ipCmds.push(...set.items.map(i => i.cmd));
   } catch (e) {}
@@ -2077,7 +2088,7 @@ function runAutoCmds(cfg, tabId) {
 syncBroadcastButton();
 $('btn-broadcast').onclick = () => {
   broadcastInput = !broadcastInput;
-  try { localStorage.setItem('sshterm.broadcast', broadcastInput ? '1' : '0'); } catch {}
+  try { localStorage.setItem('xterm.broadcast', broadcastInput ? '1' : '0'); } catch {}
   syncBroadcastButton();
   const n = terminalInputTargets().filter(t => t.state === 'connected').length;
   setStatus(broadcastInput
@@ -2158,6 +2169,7 @@ $('btn-scan-start').onclick = () => {
     setStatus(`网络扫描: ${target}`);
     send({ type: 'scan-net', target });
   } else {
+    setStatus(`端口扫描: ${target}`);
     send({ type: 'scan', host: target, ports: SCAN_PORTS });
   }
 };
@@ -2202,7 +2214,7 @@ function renderLogs(list, file) {
   lastLogs = list; lastLogFile = file || lastLogFile;
   if (file) $('log-file').textContent = `日志文件: ${file}`;
   const el = $('log-list');
-  const saved = new Set(JSON.parse(localStorage.getItem('sshterm.log.bookmarks') || '[]'));
+  const saved = new Set(JSON.parse(localStorage.getItem('xterm.log.bookmarks') || '[]'));
   const onlyBookmarks = $('log-bookmarks')?.dataset.only === '1';
   const onlyAudit = $('log-audit')?.dataset.only === '1';
   const visible = list.filter(l => (!onlyBookmarks || saved.has(`${l.t}|${l.msg}`)) && (!onlyAudit || l.level === 'audit'));
@@ -2213,15 +2225,15 @@ function renderLogs(list, file) {
         <span class="log-msg">${esc(l.msg)}</span><button class="mini log-star" data-key="${esc(key)}">${saved.has(key) ? '★' : '☆'}</button></div>`; }).join('')
     : '<div class="muted">(暂无日志)</div>';
   el.querySelectorAll('.log-star').forEach(btn => btn.onclick = () => {
-    const key = btn.dataset.key; const next = new Set(JSON.parse(localStorage.getItem('sshterm.log.bookmarks') || '[]'));
+    const key = btn.dataset.key; const next = new Set(JSON.parse(localStorage.getItem('xterm.log.bookmarks') || '[]'));
     if (next.has(key)) next.delete(key); else next.add(key);
-    localStorage.setItem('sshterm.log.bookmarks', JSON.stringify([...next].slice(-200)));
+    localStorage.setItem('xterm.log.bookmarks', JSON.stringify([...next].slice(-200)));
     renderLogs(list, file);
   });
   el.scrollTop = el.scrollHeight;
 }
 function exportVisibleLogs() {
-  const saved = new Set(JSON.parse(localStorage.getItem('sshterm.log.bookmarks') || '[]'));
+  const saved = new Set(JSON.parse(localStorage.getItem('xterm.log.bookmarks') || '[]'));
   const onlyBookmarks = $('log-bookmarks')?.dataset.only === '1';
   const onlyAudit = $('log-audit')?.dataset.only === '1';
   const csv = (v) => {
@@ -2234,7 +2246,7 @@ function exportVisibleLogs() {
     .filter(l => (!onlyBookmarks || saved.has(`${l.t}|${l.msg}`)) && (!onlyAudit || l.level === 'audit'))
     .map(l => [l.t, l.level, l.msg].map(csv).join(','));
   saveBlob(new Blob([[['time', 'level', 'message'].map(csv).join(','), ...rows].join('\r\n')],
-    { type: 'text/csv;charset=utf-8' }), `sshterm-audit-${Date.now()}.csv`);
+    { type: 'text/csv;charset=utf-8' }), `xterm-audit-${Date.now()}.csv`);
 }
 
 // ---------- SSH 隧道 UI → web/js/tunnel-ui.js ----------
@@ -2295,7 +2307,10 @@ $('btn-welcome-new').onclick = () => openDlg();
 // ---------- 更多工具下拉 (日志/语言/定时/扫描) ----------
 $('btn-more').onclick = (e) => {
   e.stopPropagation();
-  $('menu-more').classList.toggle('hidden');
+  const menu = $('menu-more');
+  const opening = menu.classList.contains('hidden');
+  menu.classList.toggle('hidden');
+  if (opening) syncCaptureRecordMenu();
 };
 document.addEventListener('click', () => {
   $('menu-more').classList.add('hidden');
@@ -2317,25 +2332,74 @@ $('btn-sshcfg').onclick = () => {
   $('sshcfg-list').querySelector('tbody').innerHTML = '';
 };
 $('sshcfg-close').onclick = () => { $('sshcfg-dialog-mask').classList.add('hidden'); };
+function flushCaptureTarget(dir) {
+  if (!dir) return;
+  if (dir._captureTimer) {
+    clearTimeout(dir._captureTimer);
+    dir._captureTimer = null;
+  }
+  const chunks = dir._capturePending || [];
+  dir._capturePending = [];
+  if (!chunks.length) return;
+  if (!dir.captureParts) dir.captureParts = [];
+  if (!dir.captureSize) dir.captureSize = 0;
+  for (const chunk of chunks) {
+    const line = `${new Date().toISOString()} RX ${hexdumpLine(chunk)}\n`;
+    dir.captureParts.push(line);
+    dir.captureSize += line.length;
+  }
+  while (dir.captureSize > CAPTURE_MAX && dir.captureParts.length) {
+    dir.captureSize -= dir.captureParts.shift().length;
+  }
+}
+function pad2(n) { return String(n).padStart(2, '0'); }
+function localFileStamp(date = new Date()) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}_${pad2(date.getHours())}-${pad2(date.getMinutes())}-${pad2(date.getSeconds())}`;
+}
+function safeFilePart(value) {
+  return String(value || '').replace(/[<>:"/\\|?*\u0000-\u001f]+/g, '_').replace(/^[. ]+|[. ]+$/g, '').slice(0, 60);
+}
+function sessionFileStem(tab) {
+  const name = safeFilePart(tab.cfg?.name);
+  const host = safeFilePart(tab.cfg?.host || tab.cfg?.port);
+  if (host && name && name !== host && !host.endsWith('.' + name) && !host.endsWith(name)) return `${name}-${host}`;
+  return host || name || 'session';
+}
+function captureFileName(tab) {
+  return `xterm-capture-${sessionFileStem(tab)}-${localFileStamp()}.log`;
+}
+function captureLogText(tab) {
+  const targets = [tab, ...(tab.extraPanes || [])];
+  const parts = [];
+  for (const dir of targets) {
+    flushCaptureTarget(dir);
+    if (dir.captureParts?.length) parts.push(...dir.captureParts);
+    dir.captureParts = [];
+    dir.captureSize = 0;
+  }
+  return parts.join('');
+}
 $('mi-capture').onclick = () => {
   $('menu-more').classList.add('hidden');
   const tab = tabs.find(t => t.id === activeTabId);
   if (!tab) return setStatus('没有激活的会话');
   if (tab.cfg.type === 'vnc') return setStatus('VNC 会话不支持终端原始抓包');
-  tab.logging = !tab.logging;
-  if (tab.logging) {
+  if (!tab.logging) {
+    tab.logging = true;
     tab.captureParts = [];
+    tab.captureSize = 0;
     $('mi-capture').textContent = '⏹ 停止并保存抓包';
     setStatus('原始抓包已开始 (RX/TX HEX)');
-  } else {
-    const blob = new Blob((tab.captureParts || []).join(''), { type: 'text/plain;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `sshterm-${tab.cfg.name || tab.id}-capture-${Date.now()}.log`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    $('mi-capture').textContent = '⏺ 开始原始抓包';
-    setStatus('原始抓包已保存 (RX/TX HEX)');
+    return;
+  }
+  tab.logging = false;
+  $('mi-capture').textContent = '⏺ 开始原始抓包';
+  try {
+    const name = captureFileName(tab);
+    saveBlob(new Blob([captureLogText(tab)], { type: 'text/plain;charset=utf-8' }), name);
+    setStatus(`原始抓包已保存：${name}`);
+  } catch (err) {
+    setStatus(`原始抓包保存失败：${err.message || err}`);
   }
 };
 $('log-close').onclick = () => $('dlg-log-mask').classList.add('hidden');
@@ -2344,23 +2408,40 @@ $('log-bookmarks').onclick = () => {
   b.textContent = b.dataset.only === '1' ? '★ 显示全部' : '★ 仅看书签'; renderLogs(lastLogs, lastLogFile);
 };
 function recordingFileName(tab) {
-  const safe = String(tab.cfg.name || tab.cfg.host || 'session').replace(/[<>:"/\\|?*]+/g, '_');
-  return `sshterm-recording-${safe}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+  return `xterm-recording-${sessionFileStem(tab)}-${localFileStamp()}.json`;
+}
+function flushRecording(tab) {
+  if (!tab?.recording) return;
+  if (tab._recordTimer) {
+    clearTimeout(tab._recordTimer);
+    tab._recordTimer = null;
+  }
+  const chunk = (tab._recordPending || []).join('');
+  tab._recordPending = [];
+  if (!chunk) return;
+  tab.recording.events.push({ at: Date.now() - tab.recording.startedAt, text: chunk });
+  tab.recording.size += chunk.length;
 }
 function stopSessionRecording(tab) {
   if (!tab?.recording) return;
+  flushRecording(tab);
   const recording = tab.recording;
   tab.recording = null;
   $('mi-record').textContent = '⏺ 开始会话录制';
   const exportData = {
-    format: 'sshterm-recording', version: 1,
+    format: 'xterm-recording', version: 1,
     createdAt: new Date(recording.startedAt).toISOString(),
     // Deliberately omit username and every credential field from the file.
     session: { name: tab.cfg.name || '', type: tab.cfg.type || '', host: tab.cfg.host || '', port: tab.cfg.port || '' },
     capture: 'rx-only', events: recording.events,
   };
-  saveBlob(new Blob([JSON.stringify(exportData)], { type: 'application/json;charset=utf-8' }), recordingFileName(tab));
-  setStatus(recording.stopped || `会话录制已保存（${recording.events.length} 条输出；不含键盘输入）`);
+  const name = recordingFileName(tab);
+  try {
+    saveBlob(new Blob([JSON.stringify(exportData)], { type: 'application/json;charset=utf-8' }), name);
+    setStatus(recording.stopped || `会话录制已保存：${name}（${recording.events.length} 条输出；不含键盘输入）`);
+  } catch (e) {
+    setStatus(`会话录制保存失败：${e.message || e}`);
+  }
 }
 $('mi-record').onclick = () => {
   $('menu-more').classList.add('hidden');
@@ -2373,8 +2454,8 @@ $('mi-record').onclick = () => {
   setStatus('会话录制已开始：仅记录终端输出，不记录键盘输入');
 };
 function validateRecording(value) {
-  if (!value || value.format !== 'sshterm-recording' || value.version !== 1 || !Array.isArray(value.events) || value.events.length > 100000) {
-    throw new Error('不是有效的 sshterm 录制文件');
+  if (!value || value.format !== 'xterm-recording' || value.version !== 1 || !Array.isArray(value.events) || value.events.length > 100000) {
+    throw new Error('不是有效的 xterm 录制文件');
   }
   let previous = 0; let size = 0;
   for (const event of value.events) {

@@ -10,7 +10,7 @@ fs.mkdirSync(path.join(root, 'sub'), { recursive: true });
 fs.writeFileSync(path.join(root, 'a.txt'), Buffer.alloc(1000, 7));
 fs.writeFileSync(path.join(root, 'sub', 'b.bin'), Buffer.alloc(5000, 9));
 
-process.env.SSHTERM_TEST_SFTP_ROOT = root;
+process.env.XTERM_TEST_SFTP_ROOT = root;
 const BASE = 'http://127.0.0.1:8791';
 const child = spawn(process.execPath, [path.join(__dirname, '..', 'server', 'index.js'), '--port', '8791'], { stdio: ['ignore', 'ignore', 'inherit'] });
 
@@ -32,7 +32,7 @@ function get(url) {
     }
     if (!up) throw new Error('server not up');
     const boot = await get(`${BASE}/bootstrap.js`);
-    const m = boot.body.toString().match(/__SSHTERM_TOKEN\s*=\s*"([^"]+)"/);
+    const m = boot.body.toString().match(/__XTERM_TOKEN\s*=\s*"([^"]+)"/);
     if (!m) throw new Error('no token');
     const t = encodeURIComponent(m[1]);
     const r = await get(`${BASE}/api/sftp/download-dir?conn=9900&path=${encodeURIComponent('/sub')}&token=${t}`);

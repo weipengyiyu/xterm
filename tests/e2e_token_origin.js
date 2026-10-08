@@ -1,6 +1,6 @@
 // P0 Token 鉴权漏洞回归测试
 // 验证: 1) 非可信 origin 无法获取 token 2) 非可信 origin 无法调用 API
-// 3) 无 Origin 的请求无法获取 token (CLI 需使用 X-SSHTERM-Token 头)
+// 3) 无 Origin 的请求无法获取 token (CLI 需使用 X-XTERM-Token 头)
 // 用法: node tests/e2e_token_origin.js [http://127.0.0.1:PORT]
 const http = require('http');
 const https = require('https');
@@ -27,7 +27,7 @@ async function fetch(urlStr, options = {}) {
 
 function getCliToken() {
   try {
-    const tokenFile = path.join(os.homedir(), '.sshterm', 'token');
+    const tokenFile = path.join(os.homedir(), '.xterm', 'token');
     return fs.readFileSync(tokenFile, 'utf8').trim();
   } catch { return null; }
 }
@@ -37,10 +37,10 @@ function getBootstrapToken(base) {
   const cliToken = getCliToken();
   return new Promise((resolve, reject) => {
     fetch(`${base}/bootstrap.js`, {
-      headers: { 'X-SSHTERM-Token': cliToken || '' }
+      headers: { 'X-XTERM-Token': cliToken || '' }
     })
       .then(res => {
-        const tokenMatch = res.data.match(/window\.__SSHTERM_TOKEN=([^;]+);/);
+        const tokenMatch = res.data.match(/window\.__XTERM_TOKEN=([^;]+);/);
         const rawToken = tokenMatch ? tokenMatch[1].trim() : null;
         const token = rawToken && (rawToken.startsWith('"') || rawToken.startsWith("'"))
           ? rawToken.slice(1, -1) 
@@ -81,7 +81,7 @@ async function test() {
     const res = await fetch(`${base}/bootstrap.js`, {
       headers: { 'Origin': 'http://127.0.0.1:8799' }
     });
-    if (res.status === 200 && res.data.includes('window.__SSHTERM_TOKEN=')) {
+    if (res.status === 200 && res.data.includes('window.__XTERM_TOKEN=')) {
       console.log('  ✅ 通过: 返回 200 + token\n');
       passed++;
     } else {
@@ -117,9 +117,9 @@ async function test() {
       console.log('  ⚠️ 跳过: 无法读取 CLI token 文件\n');
     } else {
       const res = await fetch(`${base}/bootstrap.js`, {
-        headers: { 'X-SSHTERM-Token': cliToken }
+        headers: { 'X-XTERM-Token': cliToken }
       });
-      if (res.status === 200 && res.data.includes('window.__SSHTERM_TOKEN=')) {
+      if (res.status === 200 && res.data.includes('window.__XTERM_TOKEN=')) {
         console.log('  ✅ 通过: 返回 200 + token\n');
         passed++;
       } else {

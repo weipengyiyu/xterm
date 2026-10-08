@@ -44,7 +44,7 @@ ws.on('message', (d, isBinary) => {
       zmReceived = m;
       // 验证文件内容
       setTimeout(() => {
-        const fp = path.join(os.homedir(), '.sshterm', 'zmodem', m.filename.replace(/[\\/]/g, '_'));
+        const fp = path.join(os.homedir(), '.xterm', 'zmodem', m.filename.replace(/[\\/]/g, '_'));
         fs.readFile(fp, 'utf8', (err, content) => {
           const okContent = !err && content.includes('ZM_E2E_CONTENT_123');
           console.log(`[4] 文件内容验证: ${okContent ? '✅ 完整' : '❌ ' + (err ? err.message : content)}`);

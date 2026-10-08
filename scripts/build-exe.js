@@ -2,7 +2,7 @@
 // 用法: node scripts/build-exe.js
 // 前置: 已装全局 caxa (npm install -g caxa) 或本机有 npx caxa
 //
-// 产物: dist/sshterm.exe
+// 产物: dist/xterm.exe
 //   - 双击即启动后台服务并自动打开浏览器 http://127.0.0.1:8787
 //   - 无需对方安装 Node.js
 //   - 已用 staging 只打包运行时 (server / web / node_modules)，体积约 50MB
@@ -13,9 +13,9 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'dist');
-const TARGET = path.join(OUT, 'sshterm.exe');
+const TARGET = path.join(OUT, 'xterm.exe');
 
-console.log('┌─ sshterm EXE 构建 ───────────────────┐');
+console.log('┌─ xterm EXE 构建 ───────────────────┐');
 
 // 1. 检查 caxa (优先使用项目 devDependency)
 try {
@@ -31,7 +31,7 @@ mkdirSync(OUT, { recursive: true });
 
 // 3. 构建采用 staging 目录: 只复制运行时文件再打包, 不依赖 caxa 的
 //    --exclude 语义 (实测对目录不生效, 曾把产物撑到 1GB)。
-const STAGING = path.join(os.tmpdir(), `sshterm-caxa-${process.pid}`);
+const STAGING = path.join(os.tmpdir(), `xterm-caxa-${process.pid}`);
 const COPY_DIRS = ['server', 'web', 'node_modules'];
 const COPY_FILES = ['package.json', 'package-lock.json', 'LICENSE'];
 
@@ -80,7 +80,7 @@ try {
   );
   console.log('│ ✅ 构建成功');
   console.log(`│ ${TARGET}`);
-  console.log('│ 双击 sshterm.exe 启动 (后台服务 + 自动打开浏览器 http://127.0.0.1:8787)');
+  console.log('│ 双击 xterm.exe 启动 (后台服务 + 自动打开浏览器 http://127.0.0.1:8787)');
 } catch (e) {
   console.log('│ ❌ caxa 构建失败');
   const detail = [e.stderr, e.stdout, e.message].filter(Boolean).join('\n').trim();

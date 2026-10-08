@@ -1,4 +1,4 @@
-// Test-only SFTP facade. It is installed solely when SSHTERM_TEST_SFTP_ROOT is
+// Test-only SFTP facade. It is installed solely when XTERM_TEST_SFTP_ROOT is
 // explicitly set, allowing transport routes to be integration-tested without
 // a network host. Production startup never imports or enables this fixture.
 const fs = require('fs');
@@ -59,7 +59,7 @@ function installLocalSftpFixture(connections, root, id = 9900) {
         }
       };
       walk('');
-      if (process.env.SSHTERM_TEST_SFTP_MISSING_ENTRY) {
+      if (process.env.XTERM_TEST_SFTP_MISSING_ENTRY) {
         files.push({
           path: `${String(dir).replace(/\/$/, '')}/removed-after-scan.bin`,
           name: 'removed-after-scan.bin', size: 123, isSymlink: false,

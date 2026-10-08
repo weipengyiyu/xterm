@@ -22,7 +22,7 @@ function readServerSources() {
 const server = readServerSources();
 const app = fs.readFileSync(path.join(root, 'web', 'app.js'), 'utf8');
 
-assert(server.includes("process.env.SSHTERM_DETACHED_GRACE_MS || 0"),
+assert(server.includes("process.env.XTERM_DETACHED_GRACE_MS || 0"),
   'detached cleanup must be opt-in');
 assert(server.includes('if (!DETACHED_CONNECTION_GRACE_MS) return;'),
   'default WebSocket loss must not schedule remote connection cleanup');

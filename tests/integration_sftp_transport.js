@@ -9,10 +9,10 @@ const { spawn } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const net = require('net');
-let PORT = Number(process.env.SSHTERM_TEST_PORT) || 0;
-const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-sftp-'));
+let PORT = Number(process.env.XTERM_TEST_PORT) || 0;
+const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-sftp-'));
 const profile = path.join(temp, 'profile');
-const tokenFile = path.join(profile, '.sshterm', 'token');
+const tokenFile = path.join(profile, '.xterm', 'token');
 const fixture = path.join(temp, 'remote');
 let clientToken = '';
 let BASE = '';
@@ -45,7 +45,7 @@ function request(method, target, headers = {}, body) {
     const join = target.includes('?') ? '&' : '?';
     const req = http.request(`${BASE}${target}${join}token=${encodeURIComponent(clientToken)}`, {
       method,
-      headers: { 'X-SSHTERM-Token': clientToken, ...headers },
+      headers: { 'X-XTERM-Token': clientToken, ...headers },
     }, res => {
       const chunks = []; res.on('data', chunk => chunks.push(chunk));
       res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }));
@@ -56,7 +56,7 @@ function request(method, target, headers = {}, body) {
 }
 function pendingUpload(name) {
   const req = http.request(`${BASE}/api/sftp/upload?conn=9900&path=.&name=${encodeURIComponent(name)}&token=${encodeURIComponent(clientToken)}`, {
-    method: 'PUT', headers: { 'Content-Length': '2', 'X-SSHTERM-Token': clientToken },
+    method: 'PUT', headers: { 'Content-Length': '2', 'X-XTERM-Token': clientToken },
   });
   const done = new Promise((resolve, reject) => {
     req.on('response', res => { const chunks = []; res.on('data', c => chunks.push(c)); res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks) })); });
@@ -81,7 +81,7 @@ function pendingUpload(name) {
   const server = spawn(process.execPath, ['server/index.js', '--port', String(PORT), '--no-open'], {
     cwd: ROOT,
     env: { ...process.env, USERPROFILE: profile, HOME: profile,
-      SSHTERM_TEST_SFTP_ROOT: fixture, SSHTERM_TEST_SFTP_MISSING_ENTRY: '1' },
+      XTERM_TEST_SFTP_ROOT: fixture, XTERM_TEST_SFTP_MISSING_ENTRY: '1' },
     stdio: 'ignore',
   });
   try {

@@ -14,7 +14,7 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const CLIENTS = 12;
 const ROUNDS = 6;
 const FLOOD_BYTES = 4 * 1024 * 1024;
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-stress-'));
+const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-stress-'));
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 

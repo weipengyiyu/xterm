@@ -11,12 +11,12 @@ async function main(){
   const SSH=require(path.join(ROOT,'server/connections/ssh'));const detached=new SSH({});let cleaned=0;
   detached._tunnels=new Map([[1,{server:{close:()=>cleaned++}}]]);detached._emitClose('remote disconnect');detached.close();record('SSH_REMOTE_CLOSE_CLEANUP',{tunnelListenersClosed:cleaned});
   const sf=new SSH({});sf.getSftp=async()=>({readdir:(p,cb)=>cb(new Error('permission denied'))});record('ZIP_SCAN_FAILURE',await sf.sftpCollectFiles('/unreadable'));
-  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'sshterm-zip-audit-'));fs.mkdirSync(path.join(dir,'folder'));
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'xterm-zip-audit-'));fs.mkdirSync(path.join(dir,'folder'));
   for(let i=0;i<3;i++)fs.writeFileSync(path.join(dir,'folder',`${i}.bin`),Buffer.alloc(2*1024*1024,65+i));
-  const service=await startService(false,{SSHTERM_TEST_SFTP_ROOT:dir});
+  const service=await startService(false,{XTERM_TEST_SFTP_ROOT:dir});
   try{
     const url=`http://127.0.0.1:${service.port}/api/sftp/download-dir?conn=9900&path=folder&token=${service.token}`;
-    const res=await fetch(url,{headers:{'X-SSHTERM-Token':service.token},signal:AbortSignal.timeout(15000)});const zip=Buffer.from(await res.arrayBuffer());
+    const res=await fetch(url,{headers:{'X-XTERM-Token':service.token},signal:AbortSignal.timeout(15000)});const zip=Buffer.from(await res.arrayBuffer());
     const entries=[];let pos=zip.indexOf(Buffer.from([0x50,0x4b,0x01,0x02]));
     while(pos>=0&&pos+46<zip.length&&zip.readUInt32LE(pos)===0x02014b50){
       const method=zip.readUInt16LE(pos+10),compressed=zip.readUInt32LE(pos+20),nameLen=zip.readUInt16LE(pos+28),extra=zip.readUInt16LE(pos+30),comment=zip.readUInt16LE(pos+32),local=zip.readUInt32LE(pos+42);
@@ -26,8 +26,8 @@ async function main(){
     record('ZIP_MULTI_LARGE',entries);
     // Same profile and occupied port: second launch must not change a live service's token.
     const second=spawn(process.execPath,['server/index.js','--port',String(service.port),'--no-open'],{cwd:ROOT,env:{...process.env,USERPROFILE:service.profile,HOME:service.profile},windowsHide:true,stdio:'ignore'});
-    await once(second,'exit');const token=fs.readFileSync(path.join(service.profile,'.sshterm/token'),'utf8');
-    const denied=await fetch(`http://127.0.0.1:${service.port}/bootstrap.js`,{headers:{'X-SSHTERM-Token':token}});
+    await once(second,'exit');const token=fs.readFileSync(path.join(service.profile,'.xterm/token'),'utf8');
+    const denied=await fetch(`http://127.0.0.1:${service.port}/bootstrap.js`,{headers:{'X-XTERM-Token':token}});
     record('DUPLICATE_START_TOKEN',{secondExit:second.exitCode,tokenOverwritten:token!==service.token,newFileTokenStatus:denied.status});
   }finally{await service.stop();}
   const proxyServer=net.createServer(s=>{s.on('error',()=>{});s.once('data',()=>s.write('HTTP/1.1 200 Connection established\r\n\r\nSSH-2.0-audit\r\n'));});const pport=await listen(proxyServer);let proxySocket;

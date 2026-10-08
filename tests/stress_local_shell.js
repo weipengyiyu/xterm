@@ -12,8 +12,8 @@ const PORT = 8918;
 const BASE = `http://127.0.0.1:${PORT}`;
 const CLIENTS = 6;
 const ROUNDS = 4;
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-local-stress-'));
-const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-local-cwd-'));
+const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-local-stress-'));
+const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-local-cwd-'));
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 

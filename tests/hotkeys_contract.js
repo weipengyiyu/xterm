@@ -11,7 +11,7 @@ const mod = fs.readFileSync(path.join(root, 'web', 'js', 'hotkeys.js'), 'utf8');
 
 assert(html.includes('/js/hotkeys.js'), 'index.html must load hotkeys module');
 assert(html.includes('id="hotkey-editor"'), 'settings must include hotkey editor');
-assert(app.includes('sshterm.hotkeys'), 'bundle must reference hotkeys localStorage key');
+assert(app.includes('xterm.hotkeys'), 'bundle must reference hotkeys localStorage key');
 assert(app.includes('function loadHotkeys'), 'loadHotkeys missing');
 assert(app.includes('function getHotkeyAction'), 'getHotkeyAction missing');
 assert(app.includes('function fillHotkeyEditor'), 'fillHotkeyEditor missing');
@@ -22,7 +22,7 @@ const sandbox = {
   localStorage: { _data: {}, getItem(k){return this._data[k]||null;}, setItem(k,v){this._data[k]=String(v);} },
   document: { getElementById(){ return null; } },
 };
-sandbox.window.Sshterm = {};
+sandbox.window.Xterm = {};
 vm.runInNewContext(mod + '\nthis.loadHotkeys=loadHotkeys; this.eventMatchesHotkey=eventMatchesHotkey; this.formatHotkey=formatHotkey; this.DEFAULT_HOTKEYS=DEFAULT_HOTKEYS; this.saveHotkeys=saveHotkeys;', sandbox);
 const map = sandbox.loadHotkeys();
 assert(map.newConnection && map.terminalSearch && map.manualReconnect && map.openSettings);

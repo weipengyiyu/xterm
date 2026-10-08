@@ -133,13 +133,13 @@ function waitForServer(deadline = Date.now() + 10000) {
       const tab = tabs.find(t => t.id === activeTabId);
       return {
         cols: container.style.gridTemplateColumns,
-        saved: JSON.parse(localStorage.getItem('sshterm.split') || '{}')[tab.id]?.grid,
+        saved: JSON.parse(localStorage.getItem('xterm.split') || '{}')[tab.id]?.grid,
       };
     });
     const colRatio = parseFloat(gridAfter.cols);
     assert(colRatio > 0.24 && colRatio < 0.36, `unexpected grid col ratio ${colRatio}`);
     assert(gridAfter.saved && Math.abs(gridAfter.saved.col - colRatio) < 0.001,
-      'grid col ratio must persist to sshterm.split prefs');
+      'grid col ratio must persist to xterm.split prefs');
 
     // Drag the horizontal grid divider: row ratio must change and persist.
     const hDivider = await page.$('.split-divider.grid-divider.col');
@@ -155,13 +155,13 @@ function waitForServer(deadline = Date.now() + 10000) {
       const tab = tabs.find(t => t.id === activeTabId);
       return {
         rows: container.style.gridTemplateRows,
-        saved: JSON.parse(localStorage.getItem('sshterm.split') || '{}')[tab.id]?.grid,
+        saved: JSON.parse(localStorage.getItem('xterm.split') || '{}')[tab.id]?.grid,
       };
     });
     const rowRatio = parseFloat(gridAfter2.rows);
     assert(rowRatio > 0.64 && rowRatio < 0.76, `unexpected grid row ratio ${rowRatio}`);
     assert(gridAfter2.saved && Math.abs(gridAfter2.saved.row - rowRatio) < 0.001,
-      'grid row ratio must persist to sshterm.split prefs');
+      'grid row ratio must persist to xterm.split prefs');
     assert.deepStrictEqual(pageErrors, [], `grid drag raised page errors: ${pageErrors.join('; ')}`);
 
     // Back to 2 panes: flex layout and its single divider must be restored.
@@ -183,7 +183,7 @@ function waitForServer(deadline = Date.now() + 10000) {
     await page.click('#btn-workspace');
     assert.strictEqual(await page.$eval('#dlg-workspace-mask', el => !el.classList.contains('hidden')), true);
     await page.click('#workspace-save');
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('sshterm.workspace.default')));
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xterm.workspace.default')));
     assert.strictEqual(saved.version, 1);
     assert.strictEqual(saved.tabs.length, 1);
     assert.strictEqual(saved.tabs[0].id, 1);

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# 生成 sshterm 终端风格图标 (纯标准库, 无第三方依赖)
+# 生成 xterm 终端风格图标 (纯标准库, 无第三方依赖)
 # 输出: assets/icon.png (原始大图, 供转 ico)
 import zlib, struct, math, os
 

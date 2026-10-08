@@ -3,7 +3,7 @@ const path = require('path');
 
 module.exports = function resolveBrowserPath(root = path.join(__dirname, '..')) {
   const candidates = [
-    process.env.SSHTERM_BROWSER_PATH,
+    process.env.XTERM_BROWSER_PATH,
     path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
     path.join(root, 'vendor', 'chrome-headless-shell', 'chrome-headless-shell.exe'),
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',

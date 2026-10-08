@@ -1,7 +1,7 @@
-# sshterm 当前状态（文档索引）
+# xterm 当前状态（文档索引）
 
 > 最后更新：**2026-09-18**  
-> 工作区：`D:\\sshterm`（Gitee `wei-peng-yi-yu/sshterm`）
+> 工作区：`D:\\xterm`（Gitee `wei-peng-yi-yu/xterm`）
 
 本文是**现行事实**入口。历史调研 / 审计正文可能仍保留旧措辞；以本节与下列「已对齐」文档为准。
 

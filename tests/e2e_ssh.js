@@ -14,12 +14,12 @@ async function main() {
   try {
     await conn.connect();
     console.log('✓ SSH 连接成功, 发送测试命令...');
-    conn.write('echo SSHTERM_END_TO_END_OK && hostname && uname -a\n');
+    conn.write('echo XTERM_END_TO_END_OK && hostname && uname -a\n');
     await new Promise(r => setTimeout(r, 3000));
     const text = out.toString('utf8');
     console.log('--- 输出片段 ---');
     console.log(text.slice(-500));
-    const ok = text.includes('SSHTERM_END_TO_END_OK');
+    const ok = text.includes('XTERM_END_TO_END_OK');
     console.log(ok ? '\n✅ SSH 端到端: 数据双向流通' : '\n❌ 未找到预期输出');
     conn.close();
     setTimeout(() => process.exit(ok ? 0 : 1), 300);

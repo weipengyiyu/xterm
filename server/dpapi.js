@@ -8,9 +8,9 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 
-const SECRETS_PATH = path.join(os.homedir(), '.sshterm', 'secrets.enc');
+const SECRETS_PATH = path.join(os.homedir(), '.xterm', 'secrets.enc');
 const SECRETS_BACKUP_PATH = `${SECRETS_PATH}.bak`;
-const SECRET_KEY_PATH = path.join(os.homedir(), '.sshterm', 'secrets.key');
+const SECRET_KEY_PATH = path.join(os.homedir(), '.xterm', 'secrets.key');
 
 function isWindows() {
   return process.platform === 'win32';

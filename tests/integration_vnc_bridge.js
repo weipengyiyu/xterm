@@ -12,7 +12,7 @@ const { WebSocket } = require('ws');
 const ROOT = path.join(__dirname, '..');
 const PORT = 8908;
 const BASE = `http://127.0.0.1:${PORT}`;
-const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-vnc-'));
+const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-vnc-'));
 const profile = path.join(temp, 'profile');
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
@@ -66,7 +66,7 @@ function wsClose(ws, timeout = 8000) {
   try {
     await waitForServer();
     const bootstrap = await httpGet(`${BASE}/bootstrap.js`, { Origin: `http://127.0.0.1:${PORT}`, Referer: `http://127.0.0.1:${PORT}/` });
-    const token = bootstrap.body.toString().match(/__SSHTERM_TOKEN\s*=\s*"([^"]+)"/)[1];
+    const token = bootstrap.body.toString().match(/__XTERM_TOKEN\s*=\s*"([^"]+)"/)[1];
 
     const moduleResponse = await httpGet(`${BASE}/vendor/@novnc/novnc/core/rfb.js`);
     assert.strictEqual(moduleResponse.status, 200, 'noVNC RFB module must be served locally');

@@ -17,7 +17,7 @@
 
 ---
 
-# sshterm 全面缺陷审计
+# xterm 全面缺陷审计
 
 审计日期：2026-09-07。基线提交：`16d3c48ec0733dc5b4932d9aacb13f287e0038ac`，**结论针对包含未提交修改的当前工作区，不只针对该提交**。文件摘要见 [source-manifest.json](source-manifest.json)。
 
@@ -263,7 +263,7 @@ destroy 发生时尚无 handle，_destroy 直接返回；迟到的 open 回调�
 
 位置：[web/app.js:200](../../web/app.js#L200)、[web/app.js:809](../../web/app.js#L809)。
 
-windowId 在 sessionStorage，标签列表却统一写 localStorage 的 `sshterm.tabs`。两个实际页面同时打开，A 可见 WINDOW_A，B 保存后 A 的恢复数据变成 WINDOW_B。后台已有窗口隔离并不能隔离浏览器恢复列表。
+windowId 在 sessionStorage，标签列表却统一写 localStorage 的 `xterm.tabs`。两个实际页面同时打开，A 可见 WINDOW_A，B 保存后 A 的恢复数据变成 WINDOW_B。后台已有窗口隔离并不能隔离浏览器恢复列表。
 
 另外，新浏览器页面关闭后再打开通常得到新的 sessionStorage windowId；旧连接默认无限保留，无法仅凭共享列表保证重新挂接原连接，可能新建连接并遗留旧连接。
 

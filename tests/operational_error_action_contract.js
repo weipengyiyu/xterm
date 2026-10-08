@@ -8,5 +8,6 @@ assert(wh.includes("action: 'sftp'"), 'sftp errors need action');
 assert(wh.includes("action: 'tunnel'"), 'tunnel errors need action');
 assert(wh.includes("action: 'save'"), 'save validation errors need action');
 assert(wh.includes("action: 'scan'") || wh.includes("action: 'scan-net'"), 'scan errors need action');
+assert(/\{[^}]*\bisPrivateIPv4\b[^}]*\}\s*=\s*require\('\.\/net-scan'\)/.test(wh), 'single-host scan must import isPrivateIPv4');
 assert(app.includes('m.action') && app.includes('setStatus'), 'UI must gate close on action / setStatus');
 console.log('✅ operational error action contract passed');

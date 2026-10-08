@@ -10,8 +10,8 @@ dist/
 Thumbs.db
 .DS_Store
 
-# 本地数据 (会话/密码在 %USERPROFILE%\.sshterm, 不在仓库内)
-.sshterm/
+# 本地数据 (会话/密码在 %USERPROFILE%\.xterm, 不在仓库内)
+.xterm/
 
 # 超过 GitHub 100MB 限制，本地测试用浏览器保留在磁盘上
 vendor/chrome-headless-shell/chrome-headless-shell.exe

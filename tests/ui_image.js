@@ -21,7 +21,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   console.log('[1] 建立 SSH 标签 (不发起真实连接)...');
   const created = await page.evaluate(() => {
     const tab = newTab({ type: 'ssh', name: '图片显示验证', host: '127.0.0.1', port: 1,
-      user: 'sshterm', password: '', auth: 'password' }, { connect: false });
+      user: 'xterm', password: '', auth: 'password' }, { connect: false });
     return !!tab && !!tab.imageAddon;
   });
   console.log('    标签+图片插件:', created ? '✅' : '❌');

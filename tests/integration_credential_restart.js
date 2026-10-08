@@ -18,7 +18,7 @@ if (process.platform !== 'win32') {
 const ROOT = path.join(__dirname, '..');
 const APP_PORT = 8911;
 const BASE = `http://127.0.0.1:${APP_PORT}`;
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-credential-restart-'));
+const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-credential-restart-'));
 const password = 'restart-fixture-密码-42';
 const vncPassword = 'vnc-restart-fixture-密码-73';
 const hostKey = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey
@@ -37,7 +37,7 @@ async function getToken(deadline = Date.now() + 10000) {
         res.on('data', chunk => { text += chunk; });
         res.on('end', () => res.statusCode === 200 ? resolve(text) : reject(new Error(`HTTP ${res.statusCode}`)));
       }).on('error', reject));
-      const match = body.match(/__SSHTERM_TOKEN\s*=\s*"([^"]+)"/);
+      const match = body.match(/__XTERM_TOKEN\s*=\s*"([^"]+)"/);
       if (match) return match[1];
     } catch {}
     await sleep(100);
@@ -127,7 +127,7 @@ async function startSshFixture() {
       },
     }));
     const vncSessionId = (await response).id;
-    const encrypted = fs.readFileSync(path.join(profile, '.sshterm', 'secrets.enc'), 'utf8');
+    const encrypted = fs.readFileSync(path.join(profile, '.xterm', 'secrets.enc'), 'utf8');
     assert(!encrypted.includes(password), 'saved credential leaked as plaintext');
     assert(!encrypted.includes(vncPassword), 'saved VNC credential leaked as plaintext');
 

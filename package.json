@@ -1,5 +1,5 @@
 {
-  "name": "sshterm",
+  "name": "xterm",
   "version": "1.0.0",
   "description": "SSH / Telnet / 串口 多标签连接工具 (Node 本地服务 + 浏览器 xterm.js)",
   "main": "server/index.js",

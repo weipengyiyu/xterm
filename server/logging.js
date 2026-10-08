@@ -14,7 +14,7 @@ function newLogFile() {
   // Include milliseconds and a random suffix so two services started within
   // the same second never write into the same log file.
   const rand = Math.random().toString(36).slice(2, 6);
-  return path.join(LOG_DIR, `sshterm-${ts}-${String(d.getMilliseconds()).padStart(3, '0')}-${rand}.log`);
+  return path.join(LOG_DIR, `xterm-${ts}-${String(d.getMilliseconds()).padStart(3, '0')}-${rand}.log`);
 }
 let LOG_FILE = newLogFile();
 function redactLog(value) {
@@ -70,7 +70,7 @@ function cleanupLogDirectory(dir, matcher) {
   } catch (e) { /* 静默处理 */ }
 }
 function cleanupOldLogs() {
-  cleanupLogDirectory(LOG_DIR, /^sshterm-\d{8}-\d{6}.*\.log$/);
+  cleanupLogDirectory(LOG_DIR, /^xterm-\d{8}-\d{6}.*\.log$/);
   cleanupLogDirectory(SESSION_LOG_DIR, /\.log$/i);
 }
 // 启动时清理旧日志

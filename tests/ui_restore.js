@@ -1,6 +1,6 @@
 // UI 测试: 刷新页面后打开的会话自动恢复 (标签保留 + 自动重连)
 const puppeteer = require('./puppeteer_test');
-const EDGE = 'C:\\Users\\Administrator\\sshterm\\vendor\\chrome-headless-shell\\chrome-headless-shell.exe';
+const EDGE = 'C:\\Users\\Administrator\\xterm\\vendor\\chrome-headless-shell\\chrome-headless-shell.exe';
 const URL = process.argv[2] || 'http://127.0.0.1:8787/';
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -32,7 +32,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     const h = document.querySelector('.term-host:not(.hidden)');
     return h ? (h.querySelector('.xterm-rows')?.textContent || '').includes('CONTENT_MARKER_123') : false;
   });
-  const lsBefore = await page.evaluate(() => (localStorage.getItem('sshterm.tabs') || '').length);
+  const lsBefore = await page.evaluate(() => (localStorage.getItem('xterm.tabs') || '').length);
   console.log('    终端含输出标记:', hasMarker, '| localStorage 长度:', lsBefore);
 
   // 2. 刷新页面

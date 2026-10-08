@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<title>sshterm 架构图</title>
+<title>xterm 架构图</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
 <style>
   :root { --bg:#020617; --card:#0f172a; --cyan:#22d3ee; --emerald:#34d399; --rose:#fb7185; --amber:#fbbf24; --slate:#94a3b8; }
@@ -17,7 +17,7 @@
 </style>
 </head>
 <body>
-<h1>sshterm — 系统架构图</h1>
+<h1>xterm — 系统架构图</h1>
 <div class="sub">Windows 本地多协议连接工具 · Node 服务端 + 浏览器 xterm.js · WebSocket binary 数据面 + JSON 控制面</div>
 
 <div class="card">
@@ -90,7 +90,7 @@
 
   <rect x="640" y="326" width="500" height="46" rx="8" fill="#0f172a" stroke="#34d399" stroke-width="1.5"/>
   <text x="660" y="348" fill="#e2e8f0" font-size="12" font-weight="700">Session Persistence + SSH Config Parser + Logs</text>
-  <text x="660" y="366" fill="#94a3b8" font-size="11">sessions.json（脱敏） · ~/.ssh/config · ~/.sshterm/logs/</text>
+  <text x="660" y="366" fill="#94a3b8" font-size="11">sessions.json（脱敏） · ~/.ssh/config · ~/.xterm/logs/</text>
 
   <!-- Protocol plugins -->
   <rect x="660" y="430" width="200" height="60" rx="8" fill="#0f172a" stroke="#34d399" stroke-width="1.5"/>
@@ -138,7 +138,7 @@
 
   <rect x="60" y="610" width="520" height="46" rx="8" fill="#0f172a" stroke="#fb7185" stroke-width="1.5"/>
   <text x="80" y="634" fill="#e2e8f0" font-size="11" font-weight="700">Session Store</text>
-  <text x="80" y="650" fill="#94a3b8" font-size="10">%USERPROFILE%\.sshterm\sessions.json · 不含敏感字段</text>
+  <text x="80" y="650" fill="#94a3b8" font-size="10">%USERPROFILE%\.xterm\sessions.json · 不含敏感字段</text>
 
   <!-- External host icons -->
   <rect x="680" y="640" width="110" height="44" rx="8" fill="#0f172a" stroke="#94a3b8" stroke-width="1.2"/>
@@ -168,7 +168,7 @@
 </div>
 
 <div style="margin-top:14px; color:#64748b; font-size:11px;">
-  Generated from source review of <code style="color:#e2e8f0">/c/tools/sshterm</code> · server/index.js 738LOC · web/app.js 1666LOC · protocol plugins 760LOC · tests 60+
+  Generated from source review of <code style="color:#e2e8f0">/c/tools/xterm</code> · server/index.js 738LOC · web/app.js 1666LOC · protocol plugins 760LOC · tests 60+
 </div>
 </body>
 </html>

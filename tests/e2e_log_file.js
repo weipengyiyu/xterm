@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const WS_URL = process.argv[2] || 'ws://127.0.0.1:8787';
-const LOG_DIR = path.join(os.homedir(), '.sshterm', 'logs');
+const LOG_DIR = path.join(os.homedir(), '.xterm', 'logs');
 
 // 启动前文件列表
 const before = fs.existsSync(LOG_DIR) ? fs.readdirSync(LOG_DIR) : [];
@@ -19,8 +19,8 @@ ws.on('message', (d, isBinary) => {
   if (m.type === 'logs') {
     console.log('[2] 日志文件:', m.file);
     const exists = m.file && fs.existsSync(m.file);
-    // 文件名应带时间戳格式 sshterm-YYYYMMDD-HHMMSS.log
-    const nameOk = /sshterm-\d{8}-\d{6}\.log$/.test(path.basename(m.file || ''));
+    // 文件名应带时间戳格式 xterm-YYYYMMDD-HHMMSS.log
+    const nameOk = /xterm-\d{8}-\d{6}\.log$/.test(path.basename(m.file || ''));
     let contentOk = false;
     if (m.file && exists) {
       const content = fs.readFileSync(m.file, 'utf8');

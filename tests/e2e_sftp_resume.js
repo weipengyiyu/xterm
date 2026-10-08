@@ -6,7 +6,7 @@ const HTTP_BASE = 'http://127.0.0.1:' + (WS_URL.match(/:(\d+)/) || [null, '8787'
 const ws = new WebSocket(WS_URL);
 
 const TABID = 103;
-const FILE = `sshterm_resume_${Date.now()}.bin`;
+const FILE = `xterm_resume_${Date.now()}.bin`;
 let connId = null, gotShell = false, out = '', home = null;
 
 function putChunk(path, name, offset, content) {

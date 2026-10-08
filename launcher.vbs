@@ -1,11 +1,11 @@
-' sshterm launcher - hidden start
+' xterm launcher - hidden start
 Set ws = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 base = fso.GetParentFolderName(WScript.ScriptFullName)
 script = base & "\launch.ps1"
 
 If Not fso.FileExists(script) Then
-  MsgBox "Launcher script not found: " & script, 16, "sshterm"
+  MsgBox "Launcher script not found: " & script, 16, "xterm"
   WScript.Quit 1
 End If
 

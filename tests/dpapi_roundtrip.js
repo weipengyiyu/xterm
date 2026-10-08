@@ -10,7 +10,7 @@ if (process.platform !== 'win32') {
   process.exit(0);
 }
 
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-dpapi-'));
+const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-dpapi-'));
 process.env.USERPROFILE = profile;
 process.env.HOME = profile;
 const dpapi = require('../server/dpapi');

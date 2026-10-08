@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $serverScript = Join-Path $scriptDir 'server\index.js'
 $appUrl = 'http://127.0.0.1:8787/'
-$logDir = Join-Path $env:USERPROFILE '.sshterm\logs'
+$logDir = Join-Path $env:USERPROFILE '.xterm\logs'
 $launcherLog = Join-Path $logDir 'launcher.log'
 $stdoutLog = Join-Path $logDir 'server-stdout.log'
 $stderrLog = Join-Path $logDir 'server-stderr.log'
@@ -20,10 +20,10 @@ function Write-LauncherLog([string]$message) {
   }
 }
 
-function Test-SshtermReady {
+function Test-XtermReady {
   try {
     $response = Invoke-WebRequest -UseBasicParsing -Uri $appUrl -TimeoutSec 1
-    return $response.StatusCode -eq 200 -and $response.Content -match '<title>sshterm\b'
+    return $response.StatusCode -eq 200 -and $response.Content -match '<title>xterm\b'
   } catch {
     return $false
   }
@@ -43,7 +43,7 @@ function Get-RunningInfo {
     $response = Invoke-WebRequest -UseBasicParsing -Uri ($appUrl + 'launcher-info') -TimeoutSec 1
     if ($response.StatusCode -ne 200) { return $null }
     $info = $response.Content | ConvertFrom-Json
-    if ($info.app -ne 'sshterm') { return $null }
+    if ($info.app -ne 'xterm') { return $null }
     return $info
   } catch {
     return $null
@@ -61,18 +61,18 @@ function Get-ListeningProcessId {
 
 function Stop-StaleServer([object]$info) {
   $processId = if ($null -ne $info -and $info.pid) { [int]$info.pid } else { Get-ListeningProcessId }
-  if (-not $processId) { throw 'Cannot identify the stale sshterm server process.' }
+  if (-not $processId) { throw 'Cannot identify the stale xterm server process.' }
   Write-LauncherLog "Source updated; restarting stale server PID $processId."
   Stop-Process -Id $processId -ErrorAction Stop
   for ($i = 0; $i -lt 40; $i++) {
     Start-Sleep -Milliseconds 100
-    if (-not (Test-SshtermReady)) { return }
+    if (-not (Test-XtermReady)) { return }
   }
-  throw "Stale sshterm server PID $processId did not stop."
+  throw "Stale xterm server PID $processId did not stop."
 }
 
 try {
-  if (Test-SshtermReady) {
+  if (Test-XtermReady) {
     $sourceBuildId = Get-SourceBuildId
     $runningInfo = Get-RunningInfo
     if ($null -ne $runningInfo -and [string]$runningInfo.buildId -eq $sourceBuildId) {
@@ -110,7 +110,7 @@ try {
   $ready = $false
   for ($i = 0; $i -lt 40; $i++) {
     Start-Sleep -Milliseconds 250
-    if (Test-SshtermReady) { $ready = $true; break }
+    if (Test-XtermReady) { $ready = $true; break }
   }
   if (-not $ready) {
     throw "Server was not ready within 10 seconds; inspect $stderrLog"

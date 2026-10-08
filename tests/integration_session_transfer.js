@@ -12,7 +12,7 @@ const { WebSocket } = require('ws');
 const ROOT = path.join(__dirname, '..');
 const PORT = 8901;
 const BASE = `http://127.0.0.1:${PORT}`;
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'sshterm-transfer-'));
+const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-transfer-'));
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 async function getToken(deadline = Date.now() + 10000) {
@@ -25,7 +25,7 @@ async function getToken(deadline = Date.now() + 10000) {
         res.on('data', chunk => { body += chunk; });
         res.on('end', () => res.statusCode === 200 ? resolve(body) : reject(new Error(`HTTP ${res.statusCode}`)));
       }).on('error', reject));
-      const match = script.match(/__SSHTERM_TOKEN\s*=\s*"([^"]+)"/);
+      const match = script.match(/__XTERM_TOKEN\s*=\s*"([^"]+)"/);
       if (match) return match[1];
     } catch {}
     await sleep(100);

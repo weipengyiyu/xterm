@@ -449,14 +449,14 @@
   <div id="dlg-transfer">
     <h3>⇄ 导入 / 导出会话 <button id="transfer-close" class="mini" style="float:right">✕</button></h3>
     <section class="transfer-section">
-      <h4>导出 sshterm 加密备份</h4>
+      <h4>导出 xterm 加密备份</h4>
       <p class="muted">备份以 AES-256-GCM 加密，可跨设备导入；口令无法找回。</p>
       <label>备份口令 <input id="backup-passphrase" type="password" minlength="12" placeholder="至少 12 个字符"></label>
       <label>确认口令 <input id="backup-passphrase-confirm" type="password" minlength="12"></label>
       <button id="backup-export" class="primary">⬇ 导出加密备份</button>
     </section>
     <section class="transfer-section">
-      <h4>导入 sshterm 加密备份</h4>
+      <h4>导入 xterm 加密备份</h4>
       <input id="backup-import-file" type="file" accept="application/json,.json">
       <label>备份口令 <input id="backup-import-passphrase" type="password" minlength="12"></label>
       <button id="backup-import">⬆ 导入备份</button>

@@ -5,7 +5,7 @@ const { randomUUID } = require('crypto');
 const { createBackup, readBackup, parseOpenSSHConfig } = require('./session-backup');
 const { connectionConfigForRequest, connectionTargetsMatch } = require('./connection-config');
 const { sanitizeSession } = require('./session-schema');
-const { isScanAllowed, expandTarget, parseIPv4 } = require('./net-scan');
+const { isScanAllowed, expandTarget, parseIPv4, isPrivateIPv4 } = require('./net-scan');
 
 function createWsMessageHandler(ctx) {
   async function handle(ws, m) {
@@ -33,13 +33,13 @@ function createWsMessageHandler(ctx) {
 
   switch (m.type) {
     case 'test-connection-output': {
-      if (!process.env.SSHTERM_TEST_SFTP_ROOT || !Number.isInteger(m.id)) return;
+      if (!process.env.XTERM_TEST_SFTP_ROOT || !Number.isInteger(m.id)) return;
       const conn = getConnection(ws, m.id);
       if (conn) sendConnectionData(conn, m.id, Buffer.from(String(m.data || '')));
       break;
     }
     case 'test-sftp-claim': {
-      if (!process.env.SSHTERM_TEST_SFTP_ROOT || !Number.isInteger(m.id)) return;
+      if (!process.env.XTERM_TEST_SFTP_ROOT || !Number.isInteger(m.id)) return;
       const fixture = connections.get(9900);
       if (!fixture) return;
       connections.set(connectionKey(ws, m.id), {
@@ -186,7 +186,7 @@ function createWsMessageHandler(ctx) {
       const data = createBackup(Object.values(sessions), m.passphrase);
       const stamp = new Date().toISOString().slice(0, 10);
       log('audit', `导出 ${Object.keys(sessions).length} 个会话（加密备份）`);
-      send(ws, { type: 'session-export', filename: `sshterm-backup-${stamp}.json`, data });
+      send(ws, { type: 'session-export', filename: `xterm-backup-${stamp}.json`, data });
       break;
     }
     case 'import-sessions-backup': {
