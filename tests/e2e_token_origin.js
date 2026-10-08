@@ -93,15 +93,16 @@ async function test() {
     failed++;
   }
 
-  // Test 3: 无 Origin 且无 CLI token 的请求应返回 403 (防止跨站 <script> 抓取)
-  console.log('Test 3: 无 Origin 无 CLI token 访问 /bootstrap.js (应返回 403)');
+  // Test 3: 无 Origin 的本机请求允许拿到 token（隐私浏览器可能剥掉 Referer）;
+  // 跨站 Origin 仍在 Test 1 中拒绝。
+  console.log('Test 3: 无 Origin 本机访问 /bootstrap.js (应返回 200 + token)');
   try {
     const res = await fetch(`${base}/bootstrap.js`);
-    if (res.status === 403) {
-      console.log('  ✅ 通过: 返回 403 forbidden\n');
+    if (res.status === 200 && res.data && res.data.includes('window.__XTERM_TOKEN=')) {
+      console.log('  ✅ 通过: 本机无 Origin 仍可获取 token\n');
       passed++;
     } else {
-      console.log(`  ❌ 失败: 状态 ${res.status}, 应为 403\n`);
+      console.log(`  ❌ 失败: 状态 ${res.status}, 本机无 Origin 应返回 200 + token\n`);
       failed++;
     }
   } catch (e) {

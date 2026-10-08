@@ -189,7 +189,85 @@ function applySettingsToAllTerminals(settings) {
   }
 }
 
+var FONT_PRESETS = [
+  { id: 'consolas', label: 'Consolas（Windows 常见）', value: 'Consolas, "Courier New", monospace' },
+  { id: 'cascadia', label: 'Cascadia Mono', value: 'Cascadia Mono, Consolas, monospace' },
+  { id: 'jetbrains', label: 'JetBrains Mono', value: 'JetBrains Mono, Consolas, monospace' },
+  { id: 'sarasa', label: '更纱黑体等宽（中文更清晰）', value: '"Sarasa Mono SC", Consolas, "Microsoft YaHei", monospace' },
+  { id: 'yahei', label: '微软雅黑 + Consolas', value: 'Consolas, "Microsoft YaHei", monospace' },
+  { id: 'custom', label: '自定义…', value: '' },
+];
+
+function matchFontPreset(fontFamily) {
+  const raw = String(fontFamily || '').trim();
+  const found = FONT_PRESETS.find(p => p.id !== 'custom' && p.value === raw);
+  return found ? found.id : 'custom';
+}
+
+function paintThemePreview(themeId) {
+  const box = document.getElementById('set-theme-preview');
+  const pack = BUILTIN_THEMES[themeId] || BUILTIN_THEMES['tokyo-night'];
+  if (!box || !pack) return;
+  const colors = [pack.theme.background, pack.theme.foreground, pack.theme.blue, pack.theme.green, pack.theme.red];
+  box.innerHTML = colors.map(c => `<i style="background:${c}"></i>`).join('');
+}
+
+function syncFontPresetUi(fontFamily) {
+  const preset = document.getElementById('set-font-preset');
+  const custom = document.getElementById('set-font-family');
+  if (!preset || !custom) return;
+  const id = matchFontPreset(fontFamily);
+  preset.value = id;
+  custom.classList.toggle('hidden', id !== 'custom');
+  if (id !== 'custom') custom.value = FONT_PRESETS.find(p => p.id === id).value;
+}
+
+function bindSettingsChrome() {
+  const nav = document.querySelector('#dlg-settings .settings-nav');
+  if (nav && !nav.dataset.bound) {
+    nav.dataset.bound = '1';
+    nav.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-settings-tab]');
+      if (!btn) return;
+      showSettingsTab(btn.getAttribute('data-settings-tab'));
+    });
+  }
+  const themeSel = document.getElementById('set-theme');
+  if (themeSel && !themeSel.dataset.bound) {
+    themeSel.dataset.bound = '1';
+    themeSel.addEventListener('change', () => paintThemePreview(themeSel.value));
+  }
+  const preset = document.getElementById('set-font-preset');
+  if (preset && !preset.dataset.bound) {
+    preset.dataset.bound = '1';
+    preset.innerHTML = FONT_PRESETS.map(p => `<option value="${p.id}">${p.label}</option>`).join('');
+    preset.addEventListener('change', () => {
+      const spec = FONT_PRESETS.find(p => p.id === preset.value) || FONT_PRESETS[0];
+      const custom = document.getElementById('set-font-family');
+      if (!custom) return;
+      if (spec.id === 'custom') {
+        custom.classList.remove('hidden');
+        custom.focus();
+      } else {
+        custom.value = spec.value;
+        custom.classList.add('hidden');
+      }
+    });
+  }
+}
+
+function showSettingsTab(name) {
+  const wanted = name === 'hotkeys' ? 'hotkeys' : 'appearance';
+  document.querySelectorAll('#dlg-settings [data-settings-tab]').forEach((btn) => {
+    btn.classList.toggle('active', btn.getAttribute('data-settings-tab') === wanted);
+  });
+  document.querySelectorAll('#dlg-settings [data-settings-page]').forEach((page) => {
+    page.classList.toggle('hidden', page.getAttribute('data-settings-page') !== wanted);
+  });
+}
+
 function fillSettingsForm(settings) {
+  bindSettingsChrome();
   const s = settings || loadTerminalSettings();
   const themeSel = document.getElementById('set-theme');
   const fontFamily = document.getElementById('set-font-family');
@@ -201,8 +279,10 @@ function fillSettingsForm(settings) {
       .map(([id, t]) => `<option value="${id}">${t.name}</option>`)
       .join('');
     themeSel.value = s.themeId;
+    paintThemePreview(s.themeId);
   }
   if (fontFamily) fontFamily.value = s.fontFamily;
+  syncFontPresetUi(s.fontFamily);
   if (fontSize) fontSize.value = String(s.fontSize);
   if (scrollback) scrollback.value = String(s.scrollback);
   if (cursorBlink) cursorBlink.checked = !!s.cursorBlink;
@@ -221,6 +301,7 @@ function collectSettingsForm() {
 function openSettingsDialog() {
   if (typeof fillHotkeyEditor === 'function') fillHotkeyEditor();
   fillSettingsForm();
+  showSettingsTab('appearance');
   const mask = document.getElementById('dlg-settings-mask');
   if (mask) mask.classList.remove('hidden');
 }

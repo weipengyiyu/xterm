@@ -461,7 +461,10 @@ function createWsMessageHandler(ctx) {
           });
           if (conn.config.id && sessions[conn.config.id]) {
             const saved = sessions[conn.config.id];
-            saved.tunnels = [...(saved.tunnels || []), { type: item.type, localPort: item.localPort, remoteHost: item.remoteHost, remotePort: item.remotePort }];
+            // Replace with live list — never append (reconnect restore would duplicate).
+            saved.tunnels = conn.listTunnels().map(t => ({
+              type: t.type, localPort: t.localPort, remoteHost: t.remoteHost, remotePort: t.remotePort,
+            }));
             saveSessions(sessions);
           }
           send(ws, { type: 'tunnel', id: m.id, action: 'add', tunnel: item, tunnels: conn.listTunnels() });

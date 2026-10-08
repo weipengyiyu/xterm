@@ -3,50 +3,242 @@
 window.Xterm = window.Xterm || {};
 var Xterm = window.Xterm;
 
-// ---------- SSH 隧道列表渲染 ----------
+var TUNNEL_TYPE_HELP = {
+  local: {
+    help: '把本机端口转到 SSH 对面那台机器上的服务。例如本机 18080 → 远端 127.0.0.1:80，浏览器访问 http://127.0.0.1:18080 即可。',
+    localLabel: '本机监听端口',
+    localPh: '18080',
+    remoteLabel: '远端目标 (主机:端口)',
+    remotePh: '127.0.0.1:80',
+    showRemote: true,
+    example: (local, remote) => `本机访问：http://127.0.0.1:${local || '18080'} → 远端 ${remote || '127.0.0.1:80'}`,
+  },
+  remote: {
+    help: '让远端机器开一个端口，连过去的流量会转到你这台电脑。常用于给内网服务暴露回跳。',
+    localLabel: '本机目标端口',
+    localPh: '3389',
+    remoteLabel: '远端监听端口',
+    remotePh: '13389',
+    showRemote: true,
+    remoteIsPort: true,
+    example: (local, remote) => `远端 127.0.0.1:${remote || '13389'} → 本机 127.0.0.1:${local || '3389'}`,
+  },
+  dynamic: {
+    help: '在本机开一个 SOCKS5 代理。浏览器或软件把代理指到 127.0.0.1:该端口，流量经 SSH 出去。',
+    localLabel: '本机 SOCKS 端口',
+    localPh: '1080',
+    remoteLabel: '远端目标',
+    remotePh: '',
+    showRemote: false,
+    example: (local) => `SOCKS5 代理：127.0.0.1:${local || '1080'}（仅本机可用）`,
+  },
+};
+
+function formatBytes(n) {
+  const v = Number(n) || 0;
+  if (v < 1024) return v + 'B';
+  if (v < 1024 * 1024) return (v / 1024).toFixed(1) + 'KB';
+  return (v / (1024 * 1024)).toFixed(1) + 'MB';
+}
+
+function tunnelRouteText(t) {
+  if (t.type === 'dynamic') return `SOCKS5  127.0.0.1:${t.localPort}`;
+  if (t.type === 'remote') return `远端 :${t.remotePort}  →  本机 127.0.0.1:${t.localPort}`;
+  return `本机 :${t.localPort}  →  ${t.remoteHost}:${t.remotePort}`;
+}
+
+function tunnelTypeLabel(type) {
+  return ({ local: '本地转发', remote: '远端转发', dynamic: 'SOCKS5' })[type] || type;
+}
+
 function renderTunnelList(m) {
   const el = $('tunnel-list');
-  const tabs = m.tunnels || [];
-  if (tabs.length === 0) {
-    el.innerHTML = '<div class="muted" style="padding:12px">暂无隧道</div>';
+  if (!el) return;
+  const list = m.tunnels || [];
+  if (list.length === 0) {
+    el.innerHTML = '<div class="tunnel-empty">还没有隧道。<br>在右侧选一种转发方式后点「创建隧道」。</div>';
     return;
   }
-  el.innerHTML = tabs.map(t => {
-    const typeMap = { local: '本地转发', remote: '远端转发', dynamic: '动态转发(SOCKS5)' };
-    const typeLabel = typeMap[t.type] || t.type;
+  el.innerHTML = list.map((t) => {
+    const err = t.lastError ? `<div class="tunnel-err">错误：${esc(t.lastError)}</div>` : '';
+    const openHint = t.type === 'local'
+      ? `http://127.0.0.1:${t.localPort}`
+      : (t.type === 'dynamic' ? `socks5://127.0.0.1:${t.localPort}` : '');
     return `
-      <div class="tunnel-item" style="padding:8px; border:1px solid #3a3b4d; margin-bottom:6px; border-radius:4px; background:#1a1b26;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <strong>${typeLabel}</strong><br>
-            <span class="muted">本地:${t.localPort} → ${t.remoteHost}:${t.remotePort}<br>状态:${t.state || 'active'} · 连接:${t.connections || 0} · RX:${t.rxBytes || 0}B · TX:${t.txBytes || 0}B${t.lastError ? `<br>错误:${esc(t.lastError)}` : ''}</span>
+      <div class="tunnel-item" data-id="${t.id}">
+        <div class="tunnel-item-main">
+          <div class="tunnel-item-title">
+            <span class="tunnel-badge">${tunnelTypeLabel(t.type)}</span>
+            <span class="tunnel-state ${t.state === 'active' ? 'ok' : ''}">${esc(t.state || 'active')}</span>
           </div>
-          <button class="mini danger tunnel-del" data-id="${t.id}" title="删除">🗑</button>
+          <div class="tunnel-route">${esc(tunnelRouteText(t))}</div>
+          <div class="tunnel-meta muted">连接 ${t.connections || 0} · RX ${formatBytes(t.rxBytes)} · TX ${formatBytes(t.txBytes)}</div>
+          ${err}
+        </div>
+        <div class="tunnel-item-actions">
+          ${openHint ? `<button type="button" class="mini tunnel-copy" data-copy="${esc(openHint)}" title="复制访问地址">复制</button>` : ''}
+          <button type="button" class="mini danger tunnel-del" data-id="${t.id}" title="删除">删除</button>
         </div>
       </div>
     `;
   }).join('');
-  // 绑定删除按钮事件
-  el.querySelectorAll('.tunnel-del').forEach(btn => {
+  el.querySelectorAll('.tunnel-del').forEach((btn) => {
     btn.onclick = (e) => {
       e.stopPropagation();
-      const id = parseInt(btn.dataset.id, 10);
-      send({ type: 'tunnel', id: tunnelTab.id, action: 'remove', tunnelId: id });
+      if (!tunnelTab) return;
+      send({ type: 'tunnel', id: tunnelTab.id, action: 'remove', tunnelId: Number(btn.dataset.id) });
+    };
+  });
+  el.querySelectorAll('.tunnel-copy').forEach((btn) => {
+    btn.onclick = async (e) => {
+      e.stopPropagation();
+      const text = btn.getAttribute('data-copy') || '';
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text);
+        else {
+          const ta = document.createElement('textarea');
+          ta.value = text; document.body.appendChild(ta); ta.select();
+          document.execCommand('copy'); ta.remove();
+        }
+        if (typeof setStatus === 'function') setStatus('已复制 ' + text);
+      } catch {
+        if (typeof setStatus === 'function') setStatus('复制失败');
+      }
     };
   });
 }
 
-// 保存当前激活的 SSH 标签 (隧道面板使用)
+function syncTunnelFormUi() {
+  const type = ($('tn-type') && $('tn-type').value) || 'local';
+  const spec = TUNNEL_TYPE_HELP[type] || TUNNEL_TYPE_HELP.local;
+  document.querySelectorAll('.tunnel-type-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.getAttribute('data-tn-type') === type);
+  });
+  if ($('tn-type-help')) $('tn-type-help').textContent = spec.help;
+  if ($('tn-local-label')) $('tn-local-label').textContent = spec.localLabel;
+  if ($('tn-remote-label')) $('tn-remote-label').textContent = spec.remoteLabel;
+  const local = $('tn-local');
+  const remote = $('tn-remote');
+  const remoteWrap = $('tn-remote-wrap');
+  if (local) {
+    local.placeholder = spec.localPh;
+    if (!local.value) local.value = spec.localPh;
+  }
+  if (remoteWrap) remoteWrap.classList.toggle('hidden', !spec.showRemote);
+  if (remote) {
+    remote.placeholder = spec.remotePh;
+    if (spec.remoteIsPort) {
+      remote.type = 'number';
+      remote.min = '1';
+      remote.max = '65535';
+      if (!remote.value || remote.value.includes(':')) remote.value = spec.remotePh;
+    } else {
+      remote.type = 'text';
+      remote.removeAttribute('min');
+      remote.removeAttribute('max');
+      if (!remote.value || /^\d+$/.test(remote.value)) remote.value = spec.remotePh;
+    }
+  }
+  updateTunnelExample();
+}
+
+function updateTunnelExample() {
+  const type = ($('tn-type') && $('tn-type').value) || 'local';
+  const spec = TUNNEL_TYPE_HELP[type] || TUNNEL_TYPE_HELP.local;
+  const el = $('tn-example');
+  if (!el) return;
+  el.textContent = spec.example(
+    ($('tn-local') && $('tn-local').value) || '',
+    ($('tn-remote') && $('tn-remote').value) || ''
+  );
+}
+
+function collectTunnelForm() {
+  const type = ($('tn-type') && $('tn-type').value) || 'local';
+  const localPort = Number(($('tn-local') && $('tn-local').value) || 0);
+  if (!Number.isInteger(localPort) || localPort < 1 || localPort > 65535) {
+    return { error: type === 'dynamic' ? '请填写有效的本机 SOCKS 端口 (1–65535)' : '请填写有效的本机端口 (1–65535)' };
+  }
+  if (type === 'dynamic') {
+    return { tunnelType: 'dynamic', localPort, remoteHost: 'SOCKS5', remotePort: 0 };
+  }
+  if (type === 'remote') {
+    const remotePort = Number(($('tn-remote') && $('tn-remote').value) || 0);
+    if (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65535) {
+      return { error: '请填写有效的远端监听端口 (1–65535)' };
+    }
+    // API: localPort = 本机目标, remotePort = 远端监听
+    return { tunnelType: 'remote', localPort, remoteHost: '127.0.0.1', remotePort };
+  }
+  const raw = String(($('tn-remote') && $('tn-remote').value) || '').trim();
+  if (!raw) return { error: '请填写远端目标，例如 127.0.0.1:80' };
+  const splitAt = raw.lastIndexOf(':');
+  if (splitAt <= 0) return { error: '远端目标格式应为 主机:端口，例如 127.0.0.1:80' };
+  const host = raw.slice(0, splitAt).trim();
+  const remotePort = Number(raw.slice(splitAt + 1));
+  if (!host) return { error: '远端主机不能为空' };
+  if (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65535) {
+    return { error: '远端端口无效' };
+  }
+  return { tunnelType: 'local', localPort, remoteHost: host, remotePort };
+}
+
+function bindTunnelFormChrome() {
+  const tabs = document.querySelector('.tunnel-type-tabs');
+  if (tabs && !tabs.dataset.bound) {
+    tabs.dataset.bound = '1';
+    tabs.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-tn-type]');
+      if (!btn || !$('tn-type')) return;
+      $('tn-type').value = btn.getAttribute('data-tn-type');
+      // Clear sticky values so placeholders for the new mode take effect.
+      if ($('tn-local')) $('tn-local').value = '';
+      if ($('tn-remote')) $('tn-remote').value = '';
+      syncTunnelFormUi();
+    });
+  }
+  ['tn-local', 'tn-remote'].forEach((id) => {
+    const el = $(id);
+    if (el && !el.dataset.exampleBound) {
+      el.dataset.exampleBound = '1';
+      el.addEventListener('input', updateTunnelExample);
+    }
+  });
+}
+
 var tunnelTab = null;
 var tunnelRefreshTimer = null;
 function openTunnelPanel(tab) {
   tunnelTab = tab;
+  bindTunnelFormChrome();
+  syncTunnelFormUi();
+  const hint = $('tunnel-session-hint');
+  if (hint) {
+    const name = (tab.cfg && (tab.cfg.name || tab.cfg.host)) || tab.id;
+    hint.textContent = `当前会话：${name}${tab.cfg && tab.cfg.host ? ` (${tab.cfg.host})` : ''}`;
+  }
+  const list = $('tunnel-list');
+  if (list) list.innerHTML = '<div class="tunnel-empty muted">加载中…</div>';
   $('dlg-tunnel-mask').classList.remove('hidden');
   send({ type: 'tunnel', id: tab.id, action: 'list' });
   clearInterval(tunnelRefreshTimer);
-  tunnelRefreshTimer = setInterval(() => { if (tunnelTab && !$('dlg-tunnel-mask').classList.contains('hidden')) send({ type: 'tunnel', id: tunnelTab.id, action: 'list' }); }, 2000);
+  tunnelRefreshTimer = setInterval(() => {
+    if (tunnelTab && !$('dlg-tunnel-mask').classList.contains('hidden')) {
+      send({ type: 'tunnel', id: tunnelTab.id, action: 'list' });
+    }
+  }, 2000);
 }
 
+function closeTunnelPanel() {
+  const mask = $('dlg-tunnel-mask');
+  if (mask) mask.classList.add('hidden');
+  clearInterval(tunnelRefreshTimer);
+  tunnelRefreshTimer = null;
+}
 
-Xterm.renderTunnelList = typeof renderTunnelList === 'function' ? renderTunnelList : Xterm.renderTunnelList;
-Xterm.openTunnelPanel = typeof openTunnelPanel === 'function' ? openTunnelPanel : Xterm.openTunnelPanel;
+Xterm.renderTunnelList = renderTunnelList;
+Xterm.openTunnelPanel = openTunnelPanel;
+Xterm.closeTunnelPanel = closeTunnelPanel;
+Xterm.collectTunnelForm = collectTunnelForm;
+Xterm.syncTunnelFormUi = syncTunnelFormUi;
+Xterm.TUNNEL_TYPE_HELP = TUNNEL_TYPE_HELP;

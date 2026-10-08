@@ -512,6 +512,7 @@ function toggleSftpPanel() {
   $('sftp-path').value = '';
   $('sftp-list').innerHTML = '';
   $('sftp-status').textContent = '定位当前目录…';
+  syncSftpLocalColumn();
   // 每次打开都向交互式 shell 查询 pwd，与终端 cwd 同步
   send({ type: 'sftp', id: sftpConnId, action: 'cwd', fresh: true });
   setTimeout(constrainSftpColumns, 0);
@@ -626,14 +627,28 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeSftpCtxMenu();
 });
 
+function sftpGlyph(isDir) {
+  return isDir
+    ? '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.8 3.8h4.2l1.3 1.5H14.2v7.2H1.8z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>'
+    : '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.2h5.1L12.2 5.2V13.8H4z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M9 2.4V5.4h3" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>';
+}
+
+function syncSftpLocalColumn() {
+  const columns = $('sftp-columns');
+  const list = $('sftp-local-list');
+  if (!columns || !list) return;
+  columns.classList.toggle('local-empty', list.children.length === 0);
+}
+
 function renderSftpList(entries) {
   sftpListEntries = entries;
   const el = $('sftp-list');
   el.innerHTML = '';
   const selHint = sftpSelectMode ? ` · 已选 ${sftpSelectedItems.size}` : '';
   $('sftp-status').textContent = `${entries.length} 项${selHint}`;
+  syncSftpLocalColumn();
   if (!entries.length) {
-    el.innerHTML = '<div class="muted" style="padding:12px">(空目录)</div>';
+    el.innerHTML = '<div class="sftp-empty">空目录</div>';
     return;
   }
   for (const e of entries) {
@@ -645,15 +660,18 @@ function renderSftpList(entries) {
     const size = e.isDir ? '—' : fmtSize(e.size);
     const time = new Date(e.mtime).toLocaleString('zh-CN',
       { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const ops = sftpSelectMode ? '' : `<span class="sftp-ops">
+      <button class="mini sftp-dl" title="${e.isDir ? '下载整个目录到本地' : '下载'}">下载</button>
+      <button class="mini sftp-rename" title="${t('sftp_op_rename')}">重命名</button>
+      <button class="mini danger sftp-del" title="${t('sftp_op_delete')}">删除</button>
+    </span>`;
     row.innerHTML = `
       ${sftpSelectMode ? `<input type="checkbox" class="sftp-select-cb" ${selected ? 'checked' : ''}>` : ''}
-      <span class="sftp-ico">${e.isDir ? '📁' : '📄'}</span>
+      <span class="sftp-ico">${sftpGlyph(e.isDir)}</span>
       <span class="sftp-name" title="${esc(e.name)}">${esc(e.name)}</span>
       <span class="sftp-size">${size}</span>
       <span class="sftp-time">${time}</span>
-      ${sftpSelectMode ? '' : '<button class="mini sftp-dl" title="' + (e.isDir ? '下载整个目录到本地' : '下载') + '">⬇</button>'}
-      ${sftpSelectMode ? '' : `<button class="mini sftp-rename" title="${t('sftp_op_rename')}">✎</button>`}
-      ${sftpSelectMode ? '' : `<button class="mini danger sftp-del" title="${t('sftp_op_delete')}">✕</button>`}`;
+      ${ops}`;
     row.querySelector('.sftp-select-cb')?.addEventListener('click', (ev) => {
       ev.stopPropagation();
       toggleSftpSelection(full, e);

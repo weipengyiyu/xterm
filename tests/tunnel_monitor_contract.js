@@ -25,5 +25,10 @@ for (const field of ['state', 'createdAt', 'rxBytes', 'txBytes', 'connections', 
 assert(ssh.includes('_pipeTunnel'), 'tunnel byte accounting missing');
 assert(server.includes('saved.tunnels'), 'tunnel persistence missing');
 assert(server.includes('隧道恢复失败'), 'tunnel recovery alert missing');
-assert(ui.includes('tunnelRefreshTimer') && ui.includes('RX:${t.rxBytes'), 'tunnel monitoring UI missing');
+assert(ui.includes('tunnelRefreshTimer') && ui.includes('formatBytes(t.rxBytes)'), 'tunnel monitoring UI missing');
+assert(ui.includes('collectTunnelForm') && ui.includes('TUNNEL_TYPE_HELP'), 'tunnel form helpers missing');
+assert(ui.includes('data-tn-type="local"') || fs.readFileSync(path.join(__dirname, '..', 'web', 'index.html'), 'utf8').includes('data-tn-type="local"'),
+  'tunnel type tabs missing in HTML');
+assert(server.includes('Replace with live list') || server.includes('conn.listTunnels().map'),
+  'tunnel persistence must replace the live list, not append');
 console.log('✅ tunnel monitoring contract passed');

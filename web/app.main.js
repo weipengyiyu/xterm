@@ -235,7 +235,8 @@ document.addEventListener('keydown', (e) => {
   }
 }, true);
 
-const TYPE_ICON = { ssh: '🖥️', telnet: '🔌', vnc: '🖼️', serial: '🔗', local: '⌨' };
+const TYPE_BADGE = { ssh: 'SSH', telnet: 'TEL', vnc: 'VNC', serial: 'COM', local: 'LOC' };
+const TYPE_ICON = TYPE_BADGE; // legacy alias used by tab labels / close dialogs
 let localShells = [];
 const STATE_TEXT = { connecting: '连接中…', connected: '● 已连接', closed: '✕ 已断开' };
 const SENSITIVE_CONFIG_KEYS = new Set(['password', 'privateKey', 'passphrase', 'loginPass']);
@@ -274,6 +275,7 @@ function persistentWindowId() {
 let windowId = persistentWindowId();
 let ws = null;
 let wsReconnectTimer = null;
+let wsConnectTimer = null;
 let wsReconnectAttempt = 0;
 const apiUrl = (pathname, params = {}) => {
   const q = new URLSearchParams({ ...params, token: clientToken, window: windowId });
@@ -292,8 +294,10 @@ let vncCredentialRequestSeq = 0;
 const pendingMfaChallenges = new Map();
 
 async function refreshBootstrapToken() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const resp = await fetch('/bootstrap.js', { cache: 'no-store' });
+    const resp = await fetch('/bootstrap.js', { cache: 'no-store', signal: controller.signal });
     if (!resp.ok) return false;
     const text = await resp.text();
     const match = text.match(/window\.__XTERM_TOKEN=(.+?);/);
@@ -302,6 +306,8 @@ async function refreshBootstrapToken() {
     return true;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -333,9 +339,11 @@ function reattachLiveTabs() {
 }
 
 function onWsOpen() {
+  clearTimeout(wsConnectTimer);
   wsReconnectAttempt = 0;
   $('conn-status').className = 'status-dot ok';
   $('conn-status-text').textContent = '服务器已连接';
+  document.dispatchEvent(new CustomEvent('xterm:connected'));
   send({ type: 'list' });
   send({ type: 'serialports' });
   send({ type: 'local-shells' });
@@ -344,6 +352,7 @@ function onWsOpen() {
 }
 
 function onWsClose(ev) {
+  clearTimeout(wsConnectTimer);
   outputHoldSent = false;
   drawBusy = false;
   $('conn-status').className = 'status-dot err';
@@ -357,10 +366,29 @@ function onWsClose(ev) {
 
 function connectWebSocket() {
   if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
-  ws = new WebSocket(wsUrl());
+  if (!clientToken) {
+    $('conn-status').className = 'status-dot err';
+    $('conn-status-text').textContent = '未拿到连接令牌，正在重试…';
+    scheduleWsReconnect();
+    return;
+  }
+  $('conn-status-text').textContent = '正在连接服务器…';
+  try {
+    ws = new WebSocket(wsUrl());
+  } catch {
+    scheduleWsReconnect();
+    return;
+  }
+  const connecting = ws;
+  wsConnectTimer = setTimeout(() => {
+    if (ws === connecting && connecting.readyState === WebSocket.CONNECTING) {
+      connecting.close();
+      scheduleWsReconnect();
+    }
+  }, 5000);
   ws.binaryType = 'arraybuffer';
-  ws.onopen = onWsOpen;
-  ws.onclose = onWsClose;
+  ws.onopen = () => { if (ws === connecting) onWsOpen(); };
+  ws.onclose = ev => { if (ws === connecting) onWsClose(ev); };
   ws.onerror = () => {};
   ws.onmessage = onWsMessage;
 }
@@ -382,7 +410,10 @@ function onWsMessage(ev) {
   const payload = buf.subarray(2);
   processTerminalOutput(tab, pane, payload);
 }
-connectWebSocket();
+(async () => {
+  if (!clientToken) await refreshBootstrapToken();
+  connectWebSocket();
+})();
 
 const DRAW_HOLD_BYTES = 256 * 1024;
 const DRAW_CAP_BYTES = 512 * 1024;
@@ -463,6 +494,8 @@ function bindOscTitle(term, target) {
 function tabLabel(tab) {
   const focused = tab._focusTarget;
   const osc = focused && focused !== tab && focused.oscTitle ? focused.oscTitle : (tab.oscTitle || '');
+  // Local ConPTY OSC titles are usually the exe path; keep the profile name (Tabby-style).
+  if (tab.cfg && tab.cfg.type === 'local' && tab.cfg.name) return tab.cfg.name;
   if (osc) return osc;
   return tab.cfg.name || ((TYPE_ICON[tab.cfg.type] || '') + ' ' + (tab.cfg.host || tab.cfg.port || ''));
 }
@@ -975,6 +1008,14 @@ function handleMsg(m) {
     case 'tunnel': {
       if (m.id !== (tunnelTab && tunnelTab.id)) break;
       if (m.action === 'list' || m.action === 'add' || m.action === 'remove') renderTunnelList(m);
+      if (m.action === 'add' && m.tunnel) {
+        const t = m.tunnel;
+        if (t.type === 'dynamic') setStatus(`SOCKS5 已就绪：127.0.0.1:${t.localPort}`);
+        else if (t.type === 'remote') setStatus(`远端转发已启用：远端 :${t.remotePort} → 本机 :${t.localPort}`);
+        else setStatus(`本地转发已启用：本机 :${t.localPort} → ${t.remoteHost}:${t.remotePort}`);
+      } else if (m.action === 'remove' && m.ok) {
+        setStatus('隧道已删除');
+      }
       break;
     }
     case 'tunnel-alert': { if (m.id === activeTabId) setStatus(`⚠ ${m.msg}`); break; }
@@ -1578,12 +1619,12 @@ function renderSessionList() {
       row.innerHTML = `
         ${batchMode ? `<input type="checkbox" class="b-cb" data-id="${esc(s.id)}" ${checked}>` : ''}
         ${batchMode ? '' : '<span class="session-drag-handle" title="拖动排序" aria-hidden="true">⠿</span>'}
-        <span class="type-icon">${TYPE_ICON[s.type] || '❔'}</span>
+        <span class="type-badge ${esc(s.type || '')}">${TYPE_BADGE[s.type] || s.type || '?'}</span>
         <span class="s-name">${esc(s.name)}</span>
         <span class="s-sub">${esc(sub)}</span>
         <span class="s-ops">
-          <button title="编辑" data-act="edit">✏️</button>
-          <button title="删除" data-act="del" class="danger">🗑</button>
+          <button title="编辑" data-act="edit">编辑</button>
+          <button title="删除" data-act="del" class="danger">删除</button>
         </span>`;
       row.ondblclick = () => { if (!batchMode) connectTo(s); };
       row.addEventListener('dragstart', (e) => {
@@ -2552,11 +2593,21 @@ updateSftpSelectUi();
   if (btn) btn.onclick = () => openSettingsDialog();
   const closeBtn = $('settings-close');
   if (closeBtn) closeBtn.onclick = () => closeSettingsDialog();
+  const closeBtn2 = $('settings-close-secondary');
+  if (closeBtn2) closeBtn2.onclick = () => closeSettingsDialog();
   const applyBtn = $('btn-settings-apply');
   if (applyBtn) applyBtn.onclick = () => applySettingsFromDialog();
   const resetBtn = $('btn-settings-reset');
   if (resetBtn) resetBtn.onclick = () => {
     fillSettingsForm(saveTerminalSettings({ ...DEFAULT_TERMINAL_SETTINGS }));
+    if (typeof saveHotkeys === 'function' && typeof DEFAULT_HOTKEYS === 'object') {
+      const restored = {};
+      for (const [action, def] of Object.entries(DEFAULT_HOTKEYS)) restored[action] = { ...def };
+      saveHotkeys(restored);
+      if (typeof fillHotkeyEditor === 'function') fillHotkeyEditor();
+    }
+    if (typeof applySettingsToAllTerminals === 'function') applySettingsToAllTerminals();
+    if (typeof setStatus === 'function') setStatus('已恢复默认外观和快捷键');
   };
 })();
 
@@ -2565,22 +2616,21 @@ $('btn-tunnel').onclick = () => {
   if (!tab || tab.cfg.type !== 'ssh') return setStatus('隧道仅适用于 SSH 会话');
   openTunnelPanel(tab);
 };
-$('tunnel-close').onclick = () => { $('dlg-tunnel-mask').classList.add('hidden'); clearInterval(tunnelRefreshTimer); tunnelRefreshTimer = null; };
+$('tunnel-close').onclick = () => closeTunnelPanel();
 $('btn-tunnel-refresh').onclick = () => {
   const tab = tunnelTab;
   if (tab) send({ type: 'tunnel', id: tab.id, action: 'list' });
 };
 $('btn-tunnel-add').onclick = () => {
   const tab = tunnelTab; if (!tab) return;
-  const type = $('tn-type').value;
-  const localPort = Number($('tn-local').value);
-  const remoteHost = $('tn-remote').value.trim();
-  if (!localPort || (type !== 'dynamic' && !remoteHost)) return setStatus(type === 'dynamic' ? '请填写本地 SOCKS 端口' : '请填写端口和远端目标');
-  const splitAt = remoteHost.lastIndexOf(':');
-  const host = splitAt > 0 ? remoteHost.slice(0, splitAt) : remoteHost;
-  const remotePort = splitAt > 0 ? Number(remoteHost.slice(splitAt + 1)) : 80;
-  send({ type: 'tunnel', id: tab.id, action: 'add', tunnelType: type, localPort,
-    remoteHost: type === 'dynamic' ? 'SOCKS5' : host, remotePort: type === 'dynamic' ? 0 : remotePort });
+  const form = collectTunnelForm();
+  if (form.error) return setStatus(form.error);
+  setStatus('正在创建隧道…');
+  send({
+    type: 'tunnel', id: tab.id, action: 'add',
+    tunnelType: form.tunnelType, localPort: form.localPort,
+    remoteHost: form.remoteHost, remotePort: form.remotePort,
+  });
 };
 $('btn-workspace').onclick = openWorkspacePanel;
 $('workspace-close').onclick = () => $('dlg-workspace-mask').classList.add('hidden');
@@ -2674,7 +2724,7 @@ $('btn-dlg-save').onclick = () => doConnect(true);
 
 function setStatus(msg) {
   $('sb-left').textContent = msg;
-  $('statusbar').style.color = msg.startsWith('错误') ? '#ef4444' : '';
+  $('statusbar').classList.toggle('is-error', /^错误/.test(msg));
 }
 $('srv-addr').textContent = `localhost${location.port ? ':' + location.port : ''}`;
 
@@ -2746,4 +2796,6 @@ document.addEventListener('keydown', (e) => {
     if (tab) activateTab(tab.id);
   }
 });
+
+document.dispatchEvent(new CustomEvent('xterm:initialized'));
 
