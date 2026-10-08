@@ -335,7 +335,8 @@ $('sftp-upload').onclick = () => $('sftp-file-input').click();
 $('sftp-file-input').onchange = async (e) => {
   const files = [...(e.target.files || [])]; if (!files.length) return;
   const snapshot = { connId: sftpConnId, path: sftpPath };
-  $('sftp-local-list').innerHTML = files.map(f => `<div class="sftp-item"><span class="sftp-ico">📄</span><span class="sftp-name">${esc(f.name)}</span><span class="sftp-size">${fmtSize(f.size)}</span></div>`).join('');
+  $('sftp-local-list').innerHTML = files.map(f => `<div class="sftp-item"><span class="sftp-ico">${sftpGlyph(false)}</span><span class="sftp-name">${esc(f.name)}</span><span class="sftp-size">${fmtSize(f.size)}</span></div>`).join('');
+  syncSftpLocalColumn();
   for (const file of files) {
     await waitForUploadQueue();
     const task = newTransferTask('上传', file.name); showProgress(`上传: ${file.name} 0%`, 0);

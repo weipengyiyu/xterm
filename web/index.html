@@ -3,10 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="google" content="notranslate">
-<title>xterm — SSH / Telnet / VNC / 串口</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>xterm</title>
+<!-- Keep startup entirely local: remote stylesheets block classic scripts,
+     including the WebSocket initializer, while an Internet request is pending. -->
 <link rel="stylesheet" href="/vendor/@xterm/xterm/css/xterm.css">
 <link rel="stylesheet" href="/style.css">
 </head>
@@ -99,17 +98,21 @@
               <!-- P2 FIX: 添加可拖拽的分隔线 -->
               <div id="sftp-divider"></div>
               <div class="sftp-head">
-                <button id="sftp-up" class="mini" title="上级目录">上一级</button>
-                <input id="sftp-path" readonly title="当前目录">
-                <button id="sftp-upload" class="mini" title="上传文件到当前目录">上传</button>
-                <button id="sftp-upload-dir" class="mini" title="上传整个文件夹(含子目录)">传文件夹</button>
-                <button id="sftp-refresh" class="mini" title="刷新">刷新</button>
-                <button id="sftp-toggle-select" class="mini" title="多选文件/目录后批量下载">多选</button>
-                <button id="sftp-select-all" class="mini hidden" title="全选当前目录">全选</button>
-                <button id="sftp-download-selected" class="mini hidden" title="下载选中项(目录递归展开)">下载选中</button>
-                <button id="sftp-pick-download-dir" class="mini" title="选择下载保存的本地目录">本地目录</button>
-                <button id="sftp-download-current-dir" class="mini" title="将当前远端目录下载到本地目录">下载当前目录</button>
-                <button id="sftp-close" class="mini" title="关闭面板">关闭</button>
+                <div class="sftp-pathbar">
+                  <button id="sftp-up" class="mini" title="上级目录">上一级</button>
+                  <input id="sftp-path" readonly title="当前目录">
+                  <button id="sftp-refresh" class="mini" title="刷新">刷新</button>
+                  <button id="sftp-close" class="mini" title="关闭面板">关闭</button>
+                </div>
+                <div class="sftp-actions">
+                  <button id="sftp-upload" class="mini" title="上传文件到当前目录">上传</button>
+                  <button id="sftp-upload-dir" class="mini" title="上传整个文件夹(含子目录)">传文件夹</button>
+                  <button id="sftp-toggle-select" class="mini" title="多选文件/目录后批量下载">多选</button>
+                  <button id="sftp-select-all" class="mini hidden" title="全选当前目录">全选</button>
+                  <button id="sftp-download-selected" class="mini hidden" title="下载选中项(目录递归展开)">下载选中</button>
+                  <button id="sftp-pick-download-dir" class="mini" title="选择下载保存的本地目录">本地目录</button>
+                  <button id="sftp-download-current-dir" class="mini" title="将当前远端目录下载到本地目录">下载当前目录</button>
+                </div>
               </div>
               <div id="sftp-download-dir-hint" class="sftp-download-dir-hint muted">本地目录: <span id="sftp-download-dir-label">未选择（下载前需指定）</span></div>
               <div id="sftp-select-bar" class="sftp-select-bar hidden">已选 <span id="sftp-select-count">0</span> 项 · 目录将递归下载全部文件</div>
@@ -128,7 +131,11 @@
         <div id="sftp-columns">
           <section id="sftp-local-column" class="sftp-column"><div class="sftp-col-title">本地待传文件</div><div id="sftp-local-list"></div></section>
           <div id="sftp-columns-divider" title="拖动调整本地与远端目录宽度"></div>
-          <section id="sftp-remote-column" class="sftp-column"><div class="sftp-col-title">远端目录</div><div id="sftp-list"></div></section>
+          <section id="sftp-remote-column" class="sftp-column">
+            <div class="sftp-col-title">远端目录</div>
+            <div class="sftp-cols-head"><span class="sftp-ico"></span><span class="sftp-name">名称</span><span class="sftp-size">大小</span><span class="sftp-time">修改</span></div>
+            <div id="sftp-list"></div>
+          </section>
         </div>
         <div class="sftp-status" id="sftp-status"></div>
       </div>
@@ -592,6 +599,7 @@
   </div>
 </div>
 
+<script src="/startup-guard.js"></script>
 <script src="/bootstrap.js"></script>
 <script src="/encoding-client.js"></script>
 <script src="/vendor/@xterm/xterm/lib/xterm.js"></script>

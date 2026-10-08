@@ -537,10 +537,8 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`  日志: ${getLogFile()}`);
   log('info', `sshterm 服务启动 (端口 ${PORT})`);
   scheduleIdleExit();
-  const open = !process.argv.includes('--no-open');
-  if (open) {
-    require('child_process').exec(`start http://127.0.0.1:${PORT}`);
-  }
+  // The desktop window is the application shell. --no-open remains accepted
+  // so tests and the desktop host can start the engine without a system browser.
 });
 server.on('error', (e) => {
   if (e.code === 'EADDRINUSE') {

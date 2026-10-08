@@ -100,11 +100,12 @@ const DOM_TEXT_EN = {
   '已连接': 'Connected', '已恢复原连接': 'Original Connection Restored',
   '✕ 已断开': '✕ Disconnected', '已断开': 'Disconnected', '出错': 'Error',
   '本地待传文件': 'Local Files', '远端目录': 'Remote Directory',
+  '名称': 'Name', '大小': 'Size', '修改': 'Modified',
   '📂 本地目录': '📂 Local Folder', '⬇ 下载当前目录': '⬇ Download Folder',
   '未选择（下载前需指定）': 'Not selected (pick a folder before download)',
   '本地目录:': 'Local folder:',
   '下载失败': 'Download Failed',
-  '已选': 'Selected', '项 · 目录将递归下载全部文件': ' · folders download all files recursively',
+  '已选': 'Selected', '项 · 目录将递归下载全部文件': '· folders download all files recursively',
   '☑ 多选': '☑ Multi-select', '✕ 退出多选': '✕ Exit multi-select', '全选': 'Select all',
   '⬇ 下载选中': '⬇ Download selected',
   '⬆️传': '⬆ Upload', '📂传': '📂 Upload Folder', '⏸ 暂停队列': '⏸ Pause Queue',
@@ -275,63 +276,90 @@ const DOM_ATTR_EN = {
 const i18nTextKeys = new WeakMap();
 const i18nAttrKeys = new WeakMap();
 
+function i18nSkip(node) {
+  if (!node || node.nodeType === Node.DOCUMENT_NODE || node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) return false;
+  const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+  if (!el) return true;
+  return !!el.closest('script, style, textarea, #terms, .xterm');
+}
+
+let i18nDepth = 0;
 function translateDom(root = document) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  const nodes = [];
-  while (walker.nextNode()) nodes.push(walker.currentNode);
-  for (const node of nodes) {
-    const current = node.nodeValue || '';
-    const trimmed = current.trim();
-    if (!trimmed) continue;
-    let key = i18nTextKeys.get(node);
-    if (!key || (trimmed !== key && trimmed !== DOM_TEXT_EN[key] && DOM_TEXT_EN[trimmed])) {
-      if (DOM_TEXT_EN[trimmed]) { key = trimmed; i18nTextKeys.set(node, key); }
-    }
-    if (!key) continue;
-    const value = LANG === 'en' ? DOM_TEXT_EN[key] : key;
-    const leading = current.match(/^\s*/)?.[0] || '';
-    const trailing = current.match(/\s*$/)?.[0] || '';
-    const next = `${leading}${value}${trailing}`;
-    if (node.nodeValue !== next) node.nodeValue = next;
-  }
-  const scope = root.querySelectorAll ? root : document;
-  const elements = [];
-  if (root.nodeType === Node.ELEMENT_NODE) elements.push(root);
-  elements.push(...scope.querySelectorAll('[title],[placeholder]'));
-  for (const el of elements) {
-    let keys = i18nAttrKeys.get(el);
-    if (!keys) { keys = {}; i18nAttrKeys.set(el, keys); }
-    for (const attr of ['title', 'placeholder']) {
-      const current = el.getAttribute?.(attr);
-      if (!current) continue;
-      let key = keys[attr];
-      if (!key || (current !== key && current !== DOM_ATTR_EN[key] && DOM_ATTR_EN[current])) {
-        if (DOM_ATTR_EN[current]) { key = current; keys[attr] = key; }
+  if (!root || i18nSkip(root)) return;
+  i18nDepth += 1;
+  if (i18nDepth === 1 && domTranslationObserver) domTranslationObserver.disconnect();
+  try {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        return i18nSkip(node) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const node of nodes) {
+      const current = node.nodeValue || '';
+      const trimmed = current.trim();
+      if (!trimmed) continue;
+      let key = i18nTextKeys.get(node);
+      if (!key || (trimmed !== key && trimmed !== DOM_TEXT_EN[key] && DOM_TEXT_EN[trimmed])) {
+        if (DOM_TEXT_EN[trimmed]) { key = trimmed; i18nTextKeys.set(node, key); }
       }
       if (!key) continue;
-      const value = LANG === 'en' ? DOM_ATTR_EN[key] : key;
-      if (current !== value) el.setAttribute(attr, value);
+      const value = String(LANG === 'en' ? DOM_TEXT_EN[key] : key).trim();
+      const leading = current.match(/^\s*/)?.[0] || '';
+      const trailing = current.match(/\s*$/)?.[0] || '';
+      const next = `${leading}${value}${trailing}`;
+      if (node.nodeValue !== next) node.nodeValue = next;
     }
+    const scope = root.querySelectorAll ? root : document;
+    const elements = [];
+    if (root.nodeType === Node.ELEMENT_NODE && !i18nSkip(root)) elements.push(root);
+    elements.push(...scope.querySelectorAll('[title],[placeholder]'));
+    for (const el of elements) {
+      if (i18nSkip(el)) continue;
+      let keys = i18nAttrKeys.get(el);
+      if (!keys) { keys = {}; i18nAttrKeys.set(el, keys); }
+      for (const attr of ['title', 'placeholder']) {
+        const current = el.getAttribute?.(attr);
+        if (!current) continue;
+        let key = keys[attr];
+        if (!key || (current !== key && current !== DOM_ATTR_EN[key] && DOM_ATTR_EN[current])) {
+          if (DOM_ATTR_EN[current]) { key = current; keys[attr] = key; }
+        }
+        if (!key) continue;
+        const value = LANG === 'en' ? DOM_ATTR_EN[key] : key;
+        if (current !== value) el.setAttribute(attr, value);
+      }
+    }
+  } finally {
+    i18nDepth -= 1;
+    if (i18nDepth === 0 && domTranslationObserver && document.body) watchI18nDom();
   }
 }
 
 let domTranslationObserver = null;
+function watchI18nDom() {
+  domTranslationObserver.observe(document.body, {
+    childList: true, subtree: true, characterData: true,
+    attributes: true, attributeFilter: ['title', 'placeholder'],
+  });
+}
 function installDomTranslationObserver() {
   if (domTranslationObserver || !document.body) return;
   domTranslationObserver = new MutationObserver(records => {
+    if (i18nDepth > 0) return;
     for (const record of records) {
-      if (record.type === 'characterData') translateDom(record.target.parentElement || document);
-      else if (record.type === 'attributes') translateDom(record.target);
+      if (record.type === 'characterData') {
+        const parent = record.target.parentElement;
+        if (parent) translateDom(parent);
+      } else if (record.type === 'attributes') translateDom(record.target);
       else for (const node of record.addedNodes) {
         if (node.nodeType === Node.ELEMENT_NODE) translateDom(node);
         else if (node.parentElement) translateDom(node.parentElement);
       }
     }
   });
-  domTranslationObserver.observe(document.body, {
-    childList: true, subtree: true, characterData: true,
-    attributes: true, attributeFilter: ['title', 'placeholder'],
-  });
+  watchI18nDom();
 }
 var LANG = localStorage.getItem('sshterm.lang') || 'zh';
 function t(key) { return (I18N[LANG] && I18N[LANG][key]) || I18N.zh[key] || key; }

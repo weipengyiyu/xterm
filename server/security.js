@@ -7,7 +7,8 @@ function buildStaticCsp(port) {
   return [
     "default-src 'self'",
     "connect-src 'self' ws://127.0.0.1:" + port + " ws://localhost:" + port + " ws://[::1]:" + port,
-    "style-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
     "script-src 'self' 'wasm-unsafe-eval'",
     "img-src 'self' data: blob:",
     "object-src 'none'",
@@ -40,8 +41,26 @@ function createSecurity({ port, clientToken }) {
     } catch { return false; }
   }
 
+  function isLoopbackSocket(req) {
+    const ra = (req.socket && req.socket.remoteAddress) || '';
+    return ra === '127.0.0.1' || ra === '::1' || ra === '::ffff:127.0.0.1';
+  }
+
+  function isLoopbackHost(req) {
+    const host = String(req.headers.host || '');
+    return host === `127.0.0.1:${port}` || host === `localhost:${port}` || host === `[::1]:${port}`;
+  }
+
   function isTrustedRequest(req) {
-    return isTrustedOrigin(req) || hasCliCapability(req);
+    if (isTrustedOrigin(req) || hasCliCapability(req)) return true;
+    // Server listens on loopback only. Some browsers / privacy modes omit
+    // Origin+Referer on same-machine script/fetch; still allow those so the
+    // UI can obtain the WS token. Cross-site pages still send Origin/Referer
+    // and remain rejected by isTrustedOrigin.
+    if (!req.headers.origin && !req.headers.referer && isLoopbackSocket(req) && isLoopbackHost(req)) {
+      return true;
+    }
+    return false;
   }
 
   function isInside(root, candidate) {

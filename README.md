@@ -2,24 +2,35 @@
 
 > 文档现状索引：[`docs/STATUS.md`](docs/STATUS.md)（最后更新 2026-09-11）。功能对标见 [`docs/FEATURE-PLAN.md`](docs/FEATURE-PLAN.md)；模块结构见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
-轻量、快速的 Windows 连接工具:点选即连,多标签同时管理 SSH / Telnet / 串口会话。
+轻量、快速的连接工具:点选即连,多标签同时管理 SSH / Telnet / 串口会话。
 浏览器界面(xterm.js 渲染,与 VSCode 终端同款),本地 Node 服务承载连接。
 
 ## 快速开始
 
 ### 首次运行
 
-首次运行建议双击 `run.bat`。它会检查 Node.js、在缺少 `node_modules` 时自动安装依赖，然后启动服务并打开浏览器：
+Windows 首次运行可双击 `launcher.vbs`。启动器会检查 Node.js、在缺少 `node_modules` 时自动安装依赖，然后打开 xterm 自己的窗口。终端引擎在这个应用里启动，不会再打开系统浏览器：
 
 ```bat
 run.bat
 ```
 
-`run.bat` 是前台诊断启动方式，因此会保留一个命令窗口；关闭该窗口会停止服务。
+默认启动后命令窗口退出，后台服务继续运行。需要前台诊断时使用 `run.bat --fg`；这时关闭命令窗口会停止服务。可用 `--no-open` 禁止打开浏览器，或 `--port 8788` 指定端口。
+
+Linux / macOS 在项目目录运行：
+
+```sh
+sh ./run.sh
+# 前台诊断：sh ./run.sh --fg
+```
+
+所有平台也可在安装依赖后运行 `npm run launch`（后台）或 `npm start`（前台）。入口都从脚本自身位置定位项目，支持移动目录以及目录名包含中文和空格；不会创建目录硬链接、符号链接或 junction。项目不分发绑定安装目录的 `.lnk`，Windows 直接双击 `launcher.vbs`。更换操作系统时请重新安装依赖，不要复制其他平台的 `node_modules`。
+
+页面启动所需的样式、脚本和字体均来自本地资源或系统字体，不需要访问 Google Fonts。外部字体样式表可能让浏览器等待网络响应，阻塞连接脚本，导致服务已经启动却一直显示“未连接服务器”；当前入口已移除这项依赖。
 
 ### 无命令窗口启动（推荐日常使用）
 
-完成首次依赖安装后，双击：
+Windows 双击：
 
 ```text
 launcher.vbs
@@ -27,12 +38,11 @@ launcher.vbs
 
 启动器会：
 
-- 从项目所在目录调用 `launch.ps1`，不依赖写死的安装路径；
-- 在后台隐藏启动 Node 服务，不显示命令窗口；
-- 等待服务就绪后自动打开 `http://127.0.0.1:8787/`；
-- 如果服务已经运行，直接打开现有服务页面，不重复启动，也不会中断活跃的 SSH 会话；
-- 即使检测到源码更新，也不会由第二次启动强制替换正在使用的服务；请先主动结束旧服务，再启动以加载新版；
-- 关闭浏览器不会结束后台服务；再次点击启动器会复用原服务，并使用内存中的会话凭据自动恢复连接，不需要重新填写密码。
+- 从自身所在目录查找 Node，直接运行 `scripts/launch.js`（找不到 Node 时再退回 `launch.ps1`），不依赖当前工作目录或写死的安装路径；
+- 打开 xterm 应用窗口，而不是系统浏览器。窗口出现前会先把本机终端引擎拉起来；
+- 同一时刻只允许一个应用实例。再次双击只会把已有窗口带到前面；
+- 引擎已在运行时直接打开窗口，不另起进程，也不会中断已有 SSH 会话；
+- 这个应用进程自己启动的引擎，会在关闭窗口时一起退出。之前已经在后台运行的引擎会保留。
 
 ### 双击停止后台服务
 
@@ -47,7 +57,8 @@ stop.vbs
 也可以手动执行隐藏启动脚本：
 
 ```powershell
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "D:\sshterm\launch.ps1"
+# 在项目目录中执行，也可给出当前项目的实际路径
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File .\launch.ps1
 ```
 
 或在终端前台手动启动：
@@ -60,7 +71,7 @@ npm start
 
 ### 启动故障排查
 
-隐藏启动不会弹出错误窗口。如果双击 `launcher.vbs` 后没有打开页面，请检查：
+`launcher.vbs` 启动失败会显示错误提示；终端入口返回非零退出码。如果没有打开页面，请检查以下日志（Linux / macOS 位于 `~/.sshterm/logs/`）：
 
 ```text
 %USERPROFILE%\.sshterm\logs\launcher.log
@@ -163,9 +174,11 @@ server/               Node 服务端
 web/                  前端 (index.html / app.js / style.css)
 tests/                e2e 测试 (SSH/Telnet/串口)
 perf-proto/           链路压测原型 (性能验证)
-run.bat               前台启动/首次安装依赖/故障诊断
+run.bat               Windows 后台启动/首次安装依赖（--fg 前台诊断）
+run.sh                Linux / macOS 启动入口
 launcher.vbs          Windows 无窗口启动入口
-launch.ps1            隐藏 Node、健康检查、打开浏览器及记录启动日志
+launch.ps1            PowerShell 启动入口（-NoBrowser / -Port / -Foreground）
+scripts/launch.js     共用启动器：目录解析、后台启动、健康检查、浏览器及日志
 stop.vbs              安全识别并停止后台 sshterm 服务
 ```
 
@@ -175,7 +188,7 @@ stop.vbs              安全识别并停止后台 sshterm 服务
 - 串口收发回环需对端设备(或安装 com0com 虚拟串口对,见下);
 - 目录 ZIP 会跳过符号链接以及扫描后消失/无法读取的文件，并在进度与完成状态中显示跳过数量；
 - 使用 `launcher.vbs` 时，关闭浏览器不会停止后台服务，再次启动会使用仍在后台内存中的凭据恢复会话；如需彻底停止，可在工具栏选择“全部关闭”后双击 `stop.vbs`；
-- 使用 `run.bat` 时，关闭命令窗口即停止服务；
+- 使用 `run.bat --fg`、`sh ./run.sh --fg` 或 `npm start` 时，关闭前台终端会停止服务；
 - 独立 EXE：本地可用 `npm run build:exe`（caxa）打出 `dist/sshterm.exe`；**对外分发**须走 GitHub Actions 签名发布（见 `docs/RELEASE.md`），不要手传未签名包。
 
 ### 串口回环验证(可选)

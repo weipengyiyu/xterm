@@ -275,6 +275,7 @@ function persistentWindowId() {
 let windowId = persistentWindowId();
 let ws = null;
 let wsReconnectTimer = null;
+let wsConnectTimer = null;
 let wsReconnectAttempt = 0;
 const apiUrl = (pathname, params = {}) => {
   const q = new URLSearchParams({ ...params, token: clientToken, window: windowId });
@@ -293,8 +294,10 @@ let vncCredentialRequestSeq = 0;
 const pendingMfaChallenges = new Map();
 
 async function refreshBootstrapToken() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const resp = await fetch('/bootstrap.js', { cache: 'no-store' });
+    const resp = await fetch('/bootstrap.js', { cache: 'no-store', signal: controller.signal });
     if (!resp.ok) return false;
     const text = await resp.text();
     const match = text.match(/window\.__SSHTERM_TOKEN=(.+?);/);
@@ -303,6 +306,8 @@ async function refreshBootstrapToken() {
     return true;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -334,9 +339,11 @@ function reattachLiveTabs() {
 }
 
 function onWsOpen() {
+  clearTimeout(wsConnectTimer);
   wsReconnectAttempt = 0;
   $('conn-status').className = 'status-dot ok';
   $('conn-status-text').textContent = '服务器已连接';
+  document.dispatchEvent(new CustomEvent('sshterm:connected'));
   send({ type: 'list' });
   send({ type: 'serialports' });
   send({ type: 'local-shells' });
@@ -345,6 +352,7 @@ function onWsOpen() {
 }
 
 function onWsClose(ev) {
+  clearTimeout(wsConnectTimer);
   outputHoldSent = false;
   drawBusy = false;
   $('conn-status').className = 'status-dot err';
@@ -358,10 +366,29 @@ function onWsClose(ev) {
 
 function connectWebSocket() {
   if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
-  ws = new WebSocket(wsUrl());
+  if (!clientToken) {
+    $('conn-status').className = 'status-dot err';
+    $('conn-status-text').textContent = '未拿到连接令牌，正在重试…';
+    scheduleWsReconnect();
+    return;
+  }
+  $('conn-status-text').textContent = '正在连接服务器…';
+  try {
+    ws = new WebSocket(wsUrl());
+  } catch {
+    scheduleWsReconnect();
+    return;
+  }
+  const connecting = ws;
+  wsConnectTimer = setTimeout(() => {
+    if (ws === connecting && connecting.readyState === WebSocket.CONNECTING) {
+      connecting.close();
+      scheduleWsReconnect();
+    }
+  }, 5000);
   ws.binaryType = 'arraybuffer';
-  ws.onopen = onWsOpen;
-  ws.onclose = onWsClose;
+  ws.onopen = () => { if (ws === connecting) onWsOpen(); };
+  ws.onclose = ev => { if (ws === connecting) onWsClose(ev); };
   ws.onerror = () => {};
   ws.onmessage = onWsMessage;
 }
@@ -383,7 +410,10 @@ function onWsMessage(ev) {
   const payload = buf.subarray(2);
   processTerminalOutput(tab, pane, payload);
 }
-connectWebSocket();
+(async () => {
+  if (!clientToken) await refreshBootstrapToken();
+  connectWebSocket();
+})();
 
 const DRAW_HOLD_BYTES = 256 * 1024;
 const DRAW_CAP_BYTES = 512 * 1024;
@@ -2685,4 +2715,6 @@ document.addEventListener('keydown', (e) => {
     if (tab) activateTab(tab.id);
   }
 });
+
+document.dispatchEvent(new CustomEvent('sshterm:initialized'));
 

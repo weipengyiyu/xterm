@@ -442,11 +442,12 @@ const DOM_TEXT_EN = {
   '已连接': 'Connected', '已恢复原连接': 'Original Connection Restored',
   '✕ 已断开': '✕ Disconnected', '已断开': 'Disconnected', '出错': 'Error',
   '本地待传文件': 'Local Files', '远端目录': 'Remote Directory',
+  '名称': 'Name', '大小': 'Size', '修改': 'Modified',
   '📂 本地目录': '📂 Local Folder', '⬇ 下载当前目录': '⬇ Download Folder',
   '未选择（下载前需指定）': 'Not selected (pick a folder before download)',
   '本地目录:': 'Local folder:',
   '下载失败': 'Download Failed',
-  '已选': 'Selected', '项 · 目录将递归下载全部文件': ' · folders download all files recursively',
+  '已选': 'Selected', '项 · 目录将递归下载全部文件': '· folders download all files recursively',
   '☑ 多选': '☑ Multi-select', '✕ 退出多选': '✕ Exit multi-select', '全选': 'Select all',
   '⬇ 下载选中': '⬇ Download selected',
   '⬆️传': '⬆ Upload', '📂传': '📂 Upload Folder', '⏸ 暂停队列': '⏸ Pause Queue',
@@ -617,63 +618,90 @@ const DOM_ATTR_EN = {
 const i18nTextKeys = new WeakMap();
 const i18nAttrKeys = new WeakMap();
 
+function i18nSkip(node) {
+  if (!node || node.nodeType === Node.DOCUMENT_NODE || node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) return false;
+  const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+  if (!el) return true;
+  return !!el.closest('script, style, textarea, #terms, .xterm');
+}
+
+let i18nDepth = 0;
 function translateDom(root = document) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  const nodes = [];
-  while (walker.nextNode()) nodes.push(walker.currentNode);
-  for (const node of nodes) {
-    const current = node.nodeValue || '';
-    const trimmed = current.trim();
-    if (!trimmed) continue;
-    let key = i18nTextKeys.get(node);
-    if (!key || (trimmed !== key && trimmed !== DOM_TEXT_EN[key] && DOM_TEXT_EN[trimmed])) {
-      if (DOM_TEXT_EN[trimmed]) { key = trimmed; i18nTextKeys.set(node, key); }
-    }
-    if (!key) continue;
-    const value = LANG === 'en' ? DOM_TEXT_EN[key] : key;
-    const leading = current.match(/^\s*/)?.[0] || '';
-    const trailing = current.match(/\s*$/)?.[0] || '';
-    const next = `${leading}${value}${trailing}`;
-    if (node.nodeValue !== next) node.nodeValue = next;
-  }
-  const scope = root.querySelectorAll ? root : document;
-  const elements = [];
-  if (root.nodeType === Node.ELEMENT_NODE) elements.push(root);
-  elements.push(...scope.querySelectorAll('[title],[placeholder]'));
-  for (const el of elements) {
-    let keys = i18nAttrKeys.get(el);
-    if (!keys) { keys = {}; i18nAttrKeys.set(el, keys); }
-    for (const attr of ['title', 'placeholder']) {
-      const current = el.getAttribute?.(attr);
-      if (!current) continue;
-      let key = keys[attr];
-      if (!key || (current !== key && current !== DOM_ATTR_EN[key] && DOM_ATTR_EN[current])) {
-        if (DOM_ATTR_EN[current]) { key = current; keys[attr] = key; }
+  if (!root || i18nSkip(root)) return;
+  i18nDepth += 1;
+  if (i18nDepth === 1 && domTranslationObserver) domTranslationObserver.disconnect();
+  try {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        return i18nSkip(node) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const node of nodes) {
+      const current = node.nodeValue || '';
+      const trimmed = current.trim();
+      if (!trimmed) continue;
+      let key = i18nTextKeys.get(node);
+      if (!key || (trimmed !== key && trimmed !== DOM_TEXT_EN[key] && DOM_TEXT_EN[trimmed])) {
+        if (DOM_TEXT_EN[trimmed]) { key = trimmed; i18nTextKeys.set(node, key); }
       }
       if (!key) continue;
-      const value = LANG === 'en' ? DOM_ATTR_EN[key] : key;
-      if (current !== value) el.setAttribute(attr, value);
+      const value = String(LANG === 'en' ? DOM_TEXT_EN[key] : key).trim();
+      const leading = current.match(/^\s*/)?.[0] || '';
+      const trailing = current.match(/\s*$/)?.[0] || '';
+      const next = `${leading}${value}${trailing}`;
+      if (node.nodeValue !== next) node.nodeValue = next;
     }
+    const scope = root.querySelectorAll ? root : document;
+    const elements = [];
+    if (root.nodeType === Node.ELEMENT_NODE && !i18nSkip(root)) elements.push(root);
+    elements.push(...scope.querySelectorAll('[title],[placeholder]'));
+    for (const el of elements) {
+      if (i18nSkip(el)) continue;
+      let keys = i18nAttrKeys.get(el);
+      if (!keys) { keys = {}; i18nAttrKeys.set(el, keys); }
+      for (const attr of ['title', 'placeholder']) {
+        const current = el.getAttribute?.(attr);
+        if (!current) continue;
+        let key = keys[attr];
+        if (!key || (current !== key && current !== DOM_ATTR_EN[key] && DOM_ATTR_EN[current])) {
+          if (DOM_ATTR_EN[current]) { key = current; keys[attr] = key; }
+        }
+        if (!key) continue;
+        const value = LANG === 'en' ? DOM_ATTR_EN[key] : key;
+        if (current !== value) el.setAttribute(attr, value);
+      }
+    }
+  } finally {
+    i18nDepth -= 1;
+    if (i18nDepth === 0 && domTranslationObserver && document.body) watchI18nDom();
   }
 }
 
 let domTranslationObserver = null;
+function watchI18nDom() {
+  domTranslationObserver.observe(document.body, {
+    childList: true, subtree: true, characterData: true,
+    attributes: true, attributeFilter: ['title', 'placeholder'],
+  });
+}
 function installDomTranslationObserver() {
   if (domTranslationObserver || !document.body) return;
   domTranslationObserver = new MutationObserver(records => {
+    if (i18nDepth > 0) return;
     for (const record of records) {
-      if (record.type === 'characterData') translateDom(record.target.parentElement || document);
-      else if (record.type === 'attributes') translateDom(record.target);
+      if (record.type === 'characterData') {
+        const parent = record.target.parentElement;
+        if (parent) translateDom(parent);
+      } else if (record.type === 'attributes') translateDom(record.target);
       else for (const node of record.addedNodes) {
         if (node.nodeType === Node.ELEMENT_NODE) translateDom(node);
         else if (node.parentElement) translateDom(node.parentElement);
       }
     }
   });
-  domTranslationObserver.observe(document.body, {
-    childList: true, subtree: true, characterData: true,
-    attributes: true, attributeFilter: ['title', 'placeholder'],
-  });
+  watchI18nDom();
 }
 var LANG = localStorage.getItem('sshterm.lang') || 'zh';
 function t(key) { return (I18N[LANG] && I18N[LANG][key]) || I18N.zh[key] || key; }
@@ -1928,6 +1956,7 @@ function toggleSftpPanel() {
   $('sftp-path').value = '';
   $('sftp-list').innerHTML = '';
   $('sftp-status').textContent = '定位当前目录…';
+  syncSftpLocalColumn();
   // 每次打开都向交互式 shell 查询 pwd，与终端 cwd 同步
   send({ type: 'sftp', id: sftpConnId, action: 'cwd', fresh: true });
   setTimeout(constrainSftpColumns, 0);
@@ -2042,14 +2071,28 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeSftpCtxMenu();
 });
 
+function sftpGlyph(isDir) {
+  return isDir
+    ? '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.8 3.8h4.2l1.3 1.5H14.2v7.2H1.8z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>'
+    : '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.2h5.1L12.2 5.2V13.8H4z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M9 2.4V5.4h3" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>';
+}
+
+function syncSftpLocalColumn() {
+  const columns = $('sftp-columns');
+  const list = $('sftp-local-list');
+  if (!columns || !list) return;
+  columns.classList.toggle('local-empty', list.children.length === 0);
+}
+
 function renderSftpList(entries) {
   sftpListEntries = entries;
   const el = $('sftp-list');
   el.innerHTML = '';
   const selHint = sftpSelectMode ? ` · 已选 ${sftpSelectedItems.size}` : '';
   $('sftp-status').textContent = `${entries.length} 项${selHint}`;
+  syncSftpLocalColumn();
   if (!entries.length) {
-    el.innerHTML = '<div class="muted" style="padding:12px">(空目录)</div>';
+    el.innerHTML = '<div class="sftp-empty">空目录</div>';
     return;
   }
   for (const e of entries) {
@@ -2061,15 +2104,18 @@ function renderSftpList(entries) {
     const size = e.isDir ? '—' : fmtSize(e.size);
     const time = new Date(e.mtime).toLocaleString('zh-CN',
       { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const ops = sftpSelectMode ? '' : `<span class="sftp-ops">
+      <button class="mini sftp-dl" title="${e.isDir ? '下载整个目录到本地' : '下载'}">下载</button>
+      <button class="mini sftp-rename" title="${t('sftp_op_rename')}">重命名</button>
+      <button class="mini danger sftp-del" title="${t('sftp_op_delete')}">删除</button>
+    </span>`;
     row.innerHTML = `
       ${sftpSelectMode ? `<input type="checkbox" class="sftp-select-cb" ${selected ? 'checked' : ''}>` : ''}
-      <span class="sftp-ico">${e.isDir ? '📁' : '📄'}</span>
+      <span class="sftp-ico">${sftpGlyph(e.isDir)}</span>
       <span class="sftp-name" title="${esc(e.name)}">${esc(e.name)}</span>
       <span class="sftp-size">${size}</span>
       <span class="sftp-time">${time}</span>
-      ${sftpSelectMode ? '' : '<button class="mini sftp-dl" title="' + (e.isDir ? '下载整个目录到本地' : '下载') + '">⬇</button>'}
-      ${sftpSelectMode ? '' : `<button class="mini sftp-rename" title="${t('sftp_op_rename')}">✎</button>`}
-      ${sftpSelectMode ? '' : `<button class="mini danger sftp-del" title="${t('sftp_op_delete')}">✕</button>`}`;
+      ${ops}`;
     row.querySelector('.sftp-select-cb')?.addEventListener('click', (ev) => {
       ev.stopPropagation();
       toggleSftpSelection(full, e);
@@ -2520,7 +2566,8 @@ $('sftp-upload').onclick = () => $('sftp-file-input').click();
 $('sftp-file-input').onchange = async (e) => {
   const files = [...(e.target.files || [])]; if (!files.length) return;
   const snapshot = { connId: sftpConnId, path: sftpPath };
-  $('sftp-local-list').innerHTML = files.map(f => `<div class="sftp-item"><span class="sftp-ico">📄</span><span class="sftp-name">${esc(f.name)}</span><span class="sftp-size">${fmtSize(f.size)}</span></div>`).join('');
+  $('sftp-local-list').innerHTML = files.map(f => `<div class="sftp-item"><span class="sftp-ico">${sftpGlyph(false)}</span><span class="sftp-name">${esc(f.name)}</span><span class="sftp-size">${fmtSize(f.size)}</span></div>`).join('');
+  syncSftpLocalColumn();
   for (const file of files) {
     await waitForUploadQueue();
     const task = newTransferTask('上传', file.name); showProgress(`上传: ${file.name} 0%`, 0);
@@ -3925,6 +3972,7 @@ function persistentWindowId() {
 let windowId = persistentWindowId();
 let ws = null;
 let wsReconnectTimer = null;
+let wsConnectTimer = null;
 let wsReconnectAttempt = 0;
 const apiUrl = (pathname, params = {}) => {
   const q = new URLSearchParams({ ...params, token: clientToken, window: windowId });
@@ -3943,8 +3991,10 @@ let vncCredentialRequestSeq = 0;
 const pendingMfaChallenges = new Map();
 
 async function refreshBootstrapToken() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const resp = await fetch('/bootstrap.js', { cache: 'no-store' });
+    const resp = await fetch('/bootstrap.js', { cache: 'no-store', signal: controller.signal });
     if (!resp.ok) return false;
     const text = await resp.text();
     const match = text.match(/window\.__SSHTERM_TOKEN=(.+?);/);
@@ -3953,6 +4003,8 @@ async function refreshBootstrapToken() {
     return true;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -3984,9 +4036,11 @@ function reattachLiveTabs() {
 }
 
 function onWsOpen() {
+  clearTimeout(wsConnectTimer);
   wsReconnectAttempt = 0;
   $('conn-status').className = 'status-dot ok';
   $('conn-status-text').textContent = '服务器已连接';
+  document.dispatchEvent(new CustomEvent('sshterm:connected'));
   send({ type: 'list' });
   send({ type: 'serialports' });
   send({ type: 'local-shells' });
@@ -3995,6 +4049,7 @@ function onWsOpen() {
 }
 
 function onWsClose(ev) {
+  clearTimeout(wsConnectTimer);
   outputHoldSent = false;
   drawBusy = false;
   $('conn-status').className = 'status-dot err';
@@ -4008,10 +4063,29 @@ function onWsClose(ev) {
 
 function connectWebSocket() {
   if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
-  ws = new WebSocket(wsUrl());
+  if (!clientToken) {
+    $('conn-status').className = 'status-dot err';
+    $('conn-status-text').textContent = '未拿到连接令牌，正在重试…';
+    scheduleWsReconnect();
+    return;
+  }
+  $('conn-status-text').textContent = '正在连接服务器…';
+  try {
+    ws = new WebSocket(wsUrl());
+  } catch {
+    scheduleWsReconnect();
+    return;
+  }
+  const connecting = ws;
+  wsConnectTimer = setTimeout(() => {
+    if (ws === connecting && connecting.readyState === WebSocket.CONNECTING) {
+      connecting.close();
+      scheduleWsReconnect();
+    }
+  }, 5000);
   ws.binaryType = 'arraybuffer';
-  ws.onopen = onWsOpen;
-  ws.onclose = onWsClose;
+  ws.onopen = () => { if (ws === connecting) onWsOpen(); };
+  ws.onclose = ev => { if (ws === connecting) onWsClose(ev); };
   ws.onerror = () => {};
   ws.onmessage = onWsMessage;
 }
@@ -4033,7 +4107,10 @@ function onWsMessage(ev) {
   const payload = buf.subarray(2);
   processTerminalOutput(tab, pane, payload);
 }
-connectWebSocket();
+(async () => {
+  if (!clientToken) await refreshBootstrapToken();
+  connectWebSocket();
+})();
 
 const DRAW_HOLD_BYTES = 256 * 1024;
 const DRAW_CAP_BYTES = 512 * 1024;
@@ -6335,3 +6412,5 @@ document.addEventListener('keydown', (e) => {
     if (tab) activateTab(tab.id);
   }
 });
+
+document.dispatchEvent(new CustomEvent('sshterm:initialized'));
