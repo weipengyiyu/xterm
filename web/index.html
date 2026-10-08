@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="google" content="notranslate">
 <title>xterm — SSH / Telnet / VNC / 串口</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/vendor/@xterm/xterm/css/xterm.css">
 <link rel="stylesheet" href="/style.css">
 </head>
@@ -11,41 +14,50 @@
 <div id="app">
   <!-- 工具栏 -->
   <div id="toolbar">
-    <button id="btn-new" title="新建连接 (Ctrl+N)">＋ 新建连接</button>
-    <div class="dropdown" id="wrap-local">
-      <button id="btn-local" title="打开本机终端 (PowerShell / CMD / WSL / Git Bash)">⌨ 本地</button>
-      <div id="menu-local" class="hidden"></div>
+    <div class="tb-brand" aria-hidden="true">xterm</div>
+    <div class="tb-group tb-primary">
+      <button id="btn-new" class="primary" title="新建连接 (Ctrl+N)">新建</button>
+      <div class="dropdown" id="wrap-local">
+        <button id="btn-local" title="打开本机终端 (PowerShell / CMD / WSL / Git Bash)">本地</button>
+        <div id="menu-local" class="hidden"></div>
+      </div>
+      <button id="btn-sftp" title="SSH 文件浏览/下载 (SFTP)">文件</button>
+      <button id="btn-tunnel" title="SSH 隧道管理" class="hidden">隧道</button>
     </div>
-    <button id="btn-sftp" title="SSH 文件浏览/下载 (SFTP)">📁 文件</button>
-    <button id="btn-tunnel" title="SSH 隧道管理" class="hidden">🔗 隧道</button>
-    <button id="btn-killall" title="断开并关闭全部会话标签" class="danger">⏹ 全部关闭</button>
-    <div class="dropdown" id="wrap-more">
-      <button id="btn-more" title="更多工具">☰ 工具</button>
-      <div id="menu-more" class="hidden">
-        <button id="mi-log">📋 操作日志</button>
-        <button id="mi-lang">🌐 切换语言</button>
-        <button id="mi-timer">⏱ 定时发送</button>
-        <button id="mi-scan">🔍 端口扫描</button>
-        <button id="mi-transfer">⇄ 导入 / 导出会话</button>
-        <button id="mi-capture">⏺ 开始原始抓包</button>
-        <button id="mi-record">⏺ 开始会话录制</button>
-        <button id="mi-replay">▶ 导入并回放录制</button>
-        <input id="recording-import-file" type="file" accept="application/json,.json" class="hidden">
+    <span class="sep"></span>
+    <div class="tb-group">
+      <button id="btn-split" title="分屏(每次增加一格，最多 2×2 / 4 格；单格用 ✕ 关闭)">分屏</button>
+      <button id="btn-pane-max" title="临时铺满当前分屏，再按一次恢复">铺满</button>
+      <button id="btn-broadcast" title="把键盘输入同步到所有已连接的终端标签和分屏" aria-pressed="false">同步输入</button>
+    </div>
+    <span class="sep"></span>
+    <div class="tb-group">
+      <button id="btn-workspace" title="保存或恢复当前标签与分屏布局">工作区</button>
+      <button id="btn-cmds" title="快捷命令(保存/执行/脚本)">命令</button>
+      <button id="btn-settings" title="终端外观设置 (字体/主题/滚动)">设置</button>
+      <div class="dropdown" id="wrap-more">
+        <button id="btn-more" title="更多工具">工具</button>
+        <div id="menu-more" class="hidden">
+          <button id="btn-killall" class="danger" title="断开并关闭全部会话标签">全部关闭</button>
+          <button id="mi-log">操作日志</button>
+          <button id="mi-lang">切换语言</button>
+          <button id="mi-timer">定时发送</button>
+          <button id="mi-scan">端口扫描</button>
+          <button id="mi-transfer">导入 / 导出会话</button>
+          <button id="mi-capture">开始原始抓包</button>
+          <button id="mi-record">开始会话录制</button>
+          <button id="mi-replay">导入并回放录制</button>
+          <input id="recording-import-file" type="file" accept="application/json,.json" class="hidden">
+        </div>
       </div>
     </div>
-    <button id="btn-split" title="分屏(每次增加一格，最多 2×2 / 4 格；单格用 ✕ 关闭)">⊞ 分屏</button>
-    <button id="btn-pane-max" title="临时铺满当前分屏，再按一次恢复">⛶ 铺满</button>
-    <button id="btn-broadcast" title="把键盘输入同步到所有已连接的终端标签和分屏" aria-pressed="false">⇄ 同步输入</button>
-    <button id="btn-workspace" title="保存或恢复当前标签与分屏布局">▣ 工作区</button>
-    <button id="btn-settings" title="终端外观设置 (字体/主题/滚动)">⚙ 设置</button>
-    <button id="btn-cmds" title="快捷命令(保存/执行/脚本)">⚡ 命令</button>
-    <span class="sep"></span>
-    <input id="quick-connect" placeholder="IP[:端口] 回车快速连接" style="width:180px; background:#1a1b2e; color:#c0caf5; border:1px solid #3a3b4d; border-radius:4px; padding:2px 8px; font-size:12px" autocomplete="off">
-    <span class="sep"></span>
-    <span id="conn-status" class="status-dot idle" title="服务器连接状态"></span>
-    <span id="conn-status-text">未连接服务器</span>
     <span class="spacer"></span>
-    <span id="srv-addr" class="muted"></span>
+    <div class="tb-group tb-right">
+      <input id="quick-connect" placeholder="IP[:端口] 回车快速连接" autocomplete="off">
+      <span id="conn-status" class="status-dot idle" title="服务器连接状态"></span>
+      <span id="conn-status-text">未连接服务器</span>
+      <span id="srv-addr" class="muted"></span>
+    </div>
   </div>
 
   <!-- 主区 -->
@@ -53,11 +65,11 @@
     <!-- 左侧: 会话列表 -->
     <aside id="sidebar">
       <div class="side-head">
-        <span id="side-title">已保存会话</span>
-        <span>
-          <button id="btn-batch" title="批量管理" class="mini">☑ 批量</button>
-          <button id="btn-refresh" title="刷新">⟳</button>
-          <button id="btn-sshcfg" title="解析 SSH config" class="mini">🔑 SSH 配置</button>
+        <span id="side-title">会话</span>
+        <span class="side-actions">
+          <button id="btn-batch" title="批量管理" class="mini">批量</button>
+          <button id="btn-refresh" title="刷新" class="mini">刷新</button>
+          <button id="btn-sshcfg" title="解析 SSH config" class="mini">SSH 配置</button>
         </span>
       </div>
       <input id="session-filter" type="search" placeholder="过滤会话…" autocomplete="off" spellcheck="false">
@@ -87,17 +99,17 @@
               <!-- P2 FIX: 添加可拖拽的分隔线 -->
               <div id="sftp-divider"></div>
               <div class="sftp-head">
-                <button id="sftp-up" class="mini" title="上级目录">⬆</button>
+                <button id="sftp-up" class="mini" title="上级目录">上一级</button>
                 <input id="sftp-path" readonly title="当前目录">
-                <button id="sftp-upload" class="mini" title="上传文件到当前目录">⬆️传</button>
-                <button id="sftp-upload-dir" class="mini" title="上传整个文件夹(含子目录)">📂传</button>
-                <button id="sftp-refresh" class="mini" title="刷新">⟳</button>
-                <button id="sftp-toggle-select" class="mini" title="多选文件/目录后批量下载">☑ 多选</button>
+                <button id="sftp-upload" class="mini" title="上传文件到当前目录">上传</button>
+                <button id="sftp-upload-dir" class="mini" title="上传整个文件夹(含子目录)">传文件夹</button>
+                <button id="sftp-refresh" class="mini" title="刷新">刷新</button>
+                <button id="sftp-toggle-select" class="mini" title="多选文件/目录后批量下载">多选</button>
                 <button id="sftp-select-all" class="mini hidden" title="全选当前目录">全选</button>
-                <button id="sftp-download-selected" class="mini hidden" title="下载选中项(目录递归展开)">⬇ 下载选中</button>
-                <button id="sftp-pick-download-dir" class="mini" title="选择下载保存的本地目录">📂 本地目录</button>
-                <button id="sftp-download-current-dir" class="mini" title="将当前远端目录下载到本地目录">⬇ 下载当前目录</button>
-                <button id="sftp-close" class="mini" title="关闭面板">✕</button>
+                <button id="sftp-download-selected" class="mini hidden" title="下载选中项(目录递归展开)">下载选中</button>
+                <button id="sftp-pick-download-dir" class="mini" title="选择下载保存的本地目录">本地目录</button>
+                <button id="sftp-download-current-dir" class="mini" title="将当前远端目录下载到本地目录">下载当前目录</button>
+                <button id="sftp-close" class="mini" title="关闭面板">关闭</button>
               </div>
               <div id="sftp-download-dir-hint" class="sftp-download-dir-hint muted">本地目录: <span id="sftp-download-dir-label">未选择（下载前需指定）</span></div>
               <div id="sftp-select-bar" class="sftp-select-bar hidden">已选 <span id="sftp-select-count">0</span> 项 · 目录将递归下载全部文件</div>
@@ -108,7 +120,7 @@
           <span id="sftp-progress-text"></span>
           <button id="sftp-cancel-transfer" class="mini danger hidden" title="取消当前下载">取消</button>
         </div>
-        <div id="sftp-tasks" class="hidden"><button id="sftp-queue-toggle" class="mini">⏸ 暂停队列</button></div>
+        <div id="sftp-tasks" class="hidden"><button id="sftp-queue-toggle" class="mini">暂停队列</button></div>
         <div id="sftp-failures" class="hidden">
           <div class="sftp-failures-title">下载失败</div>
           <div id="sftp-failures-list"></div>
@@ -122,9 +134,8 @@
       </div>
       <div id="welcome" class="hidden">
         <div class="welcome-box">
-          <h1>xterm</h1>
-          <p>SSH · Telnet · VNC · 串口 一体化连接工具</p>
-          <button id="btn-welcome-new">＋ 新建连接</button>
+          <h1 class="welcome-brand" aria-label="xterm">xterm</h1>
+          <button id="btn-welcome-new" class="primary">新建连接</button>
         </div>
       </div>
     </div>
@@ -291,21 +302,21 @@
 
 <!-- SSH 配置解析弹窗 -->
 <div id="sshcfg-dialog-mask" class="hidden">
-  <div id="sshcfg-dialog">
-    <h3>SSH 配置 (SSH config)</h3>
+  <div id="sshcfg-dialog" role="dialog" aria-labelledby="sshcfg-title">
+    <h3 id="sshcfg-title">SSH 配置 (SSH config)</h3>
     <p class="muted">发现以下 Host 条目 (点击填充表单):</p>
-    <table id="sshcfg-list" style="width:100%;border-collapse:collapse;font-size:13px;">
-      <thead><tr style="background:#2a2b3a;"><th>Host</th><th>Host</th><th>Port</th><th>User</th><th>Key</th></tr></thead>
+    <table id="sshcfg-list">
+      <thead><tr><th>别名</th><th>Host</th><th>Port</th><th>User</th><th>Key</th></tr></thead>
       <tbody></tbody>
     </table>
-    <button id="sshcfg-close" class="mini danger" style="margin-top:8px;">关闭</button>
+    <button id="sshcfg-close" class="mini danger">关闭</button>
   </div>
 </div>
 
 <!-- 关闭会话确认对话框 -->
 <div id="dlg-close-mask" class="hidden">
   <div id="dlg-close">
-    <h3>⚠️ 关闭会话?</h3>
+    <h3>关闭会话?</h3>
     <p id="close-info"></p>
     <div class="dlg-actions">
       <button id="btn-close-ok" class="danger">确认关闭</button>
@@ -317,7 +328,7 @@
 <!-- 快捷命令面板 -->
 <div id="dlg-cmds-mask" class="hidden">
   <div id="dlg-cmds">
-    <h3>⚡ 快捷命令 <button id="cmds-close" class="mini" style="float:right">✕</button></h3>
+    <h3>快捷命令 <button id="cmds-close" class="mini" style="float:right">✕</button></h3>
     <div id="cmd-cur" class="muted" style="margin-bottom:8px"></div>
     <div class="form">
       <label>命令名称 <input id="cmd-name" placeholder="如: 查看内核日志"></label>
@@ -336,12 +347,12 @@
 <!-- 串口占用对话框 -->
 <div id="dlg-occ-mask" class="hidden">
   <div id="dlg-occ">
-    <h3>🔌 串口被占用</h3>
+    <h3>串口被占用</h3>
     <p id="occ-msg" class="muted"></p>
     <p class="muted" style="font-size:11px">等待重试: 占用方释放后自动连接;强制释放: 重启该串口设备(需管理员确认 UAC),其他程序将断开</p>
     <div class="dlg-actions">
-      <button id="btn-occ-wait" class="primary">⏳ 等待重试</button>
-      <button id="btn-occ-force">⚡ 强制释放</button>
+      <button id="btn-occ-wait" class="primary">等待重试</button>
+      <button id="btn-occ-force">强制释放</button>
       <button id="btn-occ-cancel">取消</button>
     </div>
   </div>
@@ -363,7 +374,7 @@
 <!-- 端口扫描对话框 -->
 <div id="dlg-scan-mask" class="hidden">
   <div id="dlg-scan">
-    <h3>🔍 端口扫描</h3>
+    <h3>端口扫描</h3>
     <div class="form">
       <label>目标 <input id="scan-host" placeholder="192.168.1.216 或 192.168.1.0/24 或 192.168.1.1-254"></label>
       <div class="muted">单 IP → 全端口扫描;网段(含 / 或 -) → 网络扫描, 发现整个子网设备</div>
@@ -426,7 +437,7 @@
 <!-- 定时发送对话框 -->
 <div id="dlg-timer-mask" class="hidden">
   <div id="dlg-timer">
-    <h3>⏱ 定时发送</h3>
+    <h3>定时发送</h3>
     <div class="form">
       <label>发送内容 <input id="tm-content" placeholder="要定时发送的内容"></label>
       <label>周期(毫秒) <input id="tm-interval" type="number" value="1000" min="100"></label>
@@ -444,7 +455,7 @@
 <!-- 默认工作区管理 -->
 <div id="dlg-workspace-mask" class="hidden">
   <div id="dlg-workspace">
-    <h3>▣ 默认工作区 <button id="workspace-close" class="mini" style="float:right">✕</button></h3>
+    <h3>默认工作区 <button id="workspace-close" class="mini" style="float:right">✕</button></h3>
     <p class="muted">保存或恢复当前打开的会话标签、标签顺序以及分屏布局。恢复时会关闭当前连接并重新建立已保存的会话。</p>
     <div id="workspace-snapshot-summary" class="workspace-summary">尚未保存工作区</div>
     <div class="dlg-actions">
@@ -458,7 +469,7 @@
 <!-- 操作日志对话框 -->
 <div id="dlg-log-mask" class="hidden">
   <div id="dlg-log">
-    <h3>📋 操作日志 <button id="log-close" class="mini" style="float:right">✕</button></h3>
+    <h3>操作日志 <button id="log-close" class="mini" style="float:right">✕</button></h3>
     <button id="log-bookmarks" class="mini">★ 仅看书签</button>
     <button id="log-audit" class="mini">🔐 仅看审计</button>
     <button id="log-export" class="mini">⬇ 导出 CSV</button>
@@ -471,7 +482,7 @@
 <!-- 会话导入 / 导出 -->
 <div id="dlg-transfer-mask" class="hidden">
   <div id="dlg-transfer">
-    <h3>⇄ 导入 / 导出会话 <button id="transfer-close" class="mini" style="float:right">✕</button></h3>
+    <h3>导入 / 导出会话 <button id="transfer-close" class="mini" style="float:right">✕</button></h3>
     <section class="transfer-section">
       <h4>导出 sshterm 加密备份</h4>
       <p class="muted">备份以 AES-256-GCM 加密，可跨设备导入；口令无法找回。</p>

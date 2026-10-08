@@ -235,7 +235,8 @@ document.addEventListener('keydown', (e) => {
   }
 }, true);
 
-const TYPE_ICON = { ssh: '🖥️', telnet: '🔌', vnc: '🖼️', serial: '🔗', local: '⌨' };
+const TYPE_BADGE = { ssh: 'SSH', telnet: 'TEL', vnc: 'VNC', serial: 'COM', local: 'LOC' };
+const TYPE_ICON = TYPE_BADGE; // legacy alias used by tab labels / close dialogs
 let localShells = [];
 const STATE_TEXT = { connecting: '连接中…', connected: '● 已连接', closed: '✕ 已断开' };
 const SENSITIVE_CONFIG_KEYS = new Set(['password', 'privateKey', 'passphrase', 'loginPass']);
@@ -1577,12 +1578,12 @@ function renderSessionList() {
       row.innerHTML = `
         ${batchMode ? `<input type="checkbox" class="b-cb" data-id="${esc(s.id)}" ${checked}>` : ''}
         ${batchMode ? '' : '<span class="session-drag-handle" title="拖动排序" aria-hidden="true">⠿</span>'}
-        <span class="type-icon">${TYPE_ICON[s.type] || '❔'}</span>
+        <span class="type-badge ${esc(s.type || '')}">${TYPE_BADGE[s.type] || s.type || '?'}</span>
         <span class="s-name">${esc(s.name)}</span>
         <span class="s-sub">${esc(sub)}</span>
         <span class="s-ops">
-          <button title="编辑" data-act="edit">✏️</button>
-          <button title="删除" data-act="del" class="danger">🗑</button>
+          <button title="编辑" data-act="edit">编辑</button>
+          <button title="删除" data-act="del" class="danger">删除</button>
         </span>`;
       row.ondblclick = () => { if (!batchMode) connectTo(s); };
       row.addEventListener('dragstart', (e) => {
@@ -2612,7 +2613,7 @@ $('btn-dlg-save').onclick = () => doConnect(true);
 
 function setStatus(msg) {
   $('sb-left').textContent = msg;
-  $('statusbar').style.color = msg.startsWith('错误') ? '#ef4444' : '';
+  $('statusbar').classList.toggle('is-error', /^错误/.test(msg));
 }
 $('srv-addr').textContent = `localhost${location.port ? ':' + location.port : ''}`;
 

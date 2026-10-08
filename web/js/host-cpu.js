@@ -17,10 +17,10 @@ function fmtDuration(ms) {
   return `${sec}秒`;
 }
 const CPU_SPARK_N = 64;
-const CPU_SPARK_W = 96;
-const CPU_SPARK_H = 16;
-const CPU_SPARK_FILL = '#3ecf8e';
-const CPU_SPARK_STROKE = '#7eecc0';
+const CPU_SPARK_W = 72;
+const CPU_SPARK_H = 14;
+const CPU_SPARK_FILL = 'rgba(91, 159, 212, 0.35)';
+const CPU_SPARK_STROKE = '#5b9fd4';
 
 function cpuSampleValue(hist, i, n) {
   const raw = hist[hist.length - n + i];
@@ -132,11 +132,21 @@ function stopCpuAnim(tab) {
   if (tab._cpuRaf) { cancelAnimationFrame(tab._cpuRaf); tab._cpuRaf = 0; }
 }
 
+function shortenMount(mp) {
+  if (!mp || mp === '/') return '/';
+  const skip = /^\/(sys|proc|dev|run|snap)(\/|$)/;
+  if (skip.test(mp)) return '';
+  if (mp.length <= 16) return mp;
+  const parts = mp.split('/').filter(Boolean);
+  if (parts.length <= 1) return mp.slice(0, 14) + '…';
+  return '…/' + parts[parts.length - 1];
+}
+
 function renderHostInfo(tab, s) {
   const bar = tab.hostinfoBar;
   if (!bar) return;
   if (s.error) {
-    bar.innerHTML = `<span class="hi-item hi-muted">状态采集不可用</span>`;
+    bar.innerHTML = `<span class="hi-chip hi-muted">状态不可用</span>`;
     return;
   }
   const memPct = s.memPct != null ? s.memPct : 0;
@@ -148,19 +158,27 @@ function renderHostInfo(tab, s) {
   const ip = tab.cfg.host || '';
   const name = s.hostname || '';
   let html =
-    `<span class="hi-item"><b>🖥 ${esc(name || ip)}</b> <span class="hi-muted">${esc(ip)}</span></span>` +
-    `<span class="hi-item">💾 RAM <span class="${memCls}">${memPct}%</span> <span class="hi-muted">${fmtSize(s.memUsed)}/${fmtSize(s.memTotal)}</span></span>` +
-    `<span class="hi-item">⚡ 负载 <span class="${memCls}">${s.load1}</span> <span class="hi-muted">(${s.load5}/${s.load15}, ${s.cores}核)</span></span>` +
-    `<span class="hi-item hi-spark-wrap">💻 <span data-cpu-pct class="${cpuCls}">${Math.round(cpuPct)}%</span> ${cpuSparkSvg(cpuHist)}</span>` +
-    `<span class="hi-item">⏱ 连接 <span class="hi-ok">${dur}</span></span>`;
-  // 磁盘/挂载: 列出主要挂载点及用量 (按用量降序, 已取前 5)
+    `<span class="hi-chip"><span class="hi-host">${esc(name || ip || 'host')}</span>` +
+      (name && ip ? `<span class="hi-muted">${esc(ip)}</span>` : '') + `</span>` +
+    `<span class="hi-chip"><span class="hi-label">Up</span><span class="hi-ok">${dur}</span></span>` +
+    `<span class="hi-chip hi-spark-wrap"><span class="hi-label">CPU</span>` +
+      `<span data-cpu-pct class="${cpuCls}">${Math.round(cpuPct)}%</span> ${cpuSparkSvg(cpuHist)}</span>` +
+    `<span class="hi-chip"><span class="hi-label">RAM</span><span class="${memCls}">${memPct}%</span>` +
+      `<span class="hi-muted">${fmtSize(s.memUsed)}/${fmtSize(s.memTotal)}</span></span>` +
+    `<span class="hi-chip"><span class="hi-label">Load</span><span class="${memCls}">${s.load1}</span>` +
+      `<span class="hi-muted">${s.load5}/${s.load15} · ${s.cores}c</span></span>`;
   if (Array.isArray(s.disk) && s.disk.length) {
-    const disks = s.disk.map(d => {
-      const cls = d.pct >= 85 ? 'hi-warn' : (d.pct >= 60 ? 'hi-caution' : 'hi-ok');
-      const mp = d.mp === '/' ? '根/' : d.mp;
-      return `<span class="hi-disk"><span class="hi-muted">${esc(mp)}</span> <span class="${cls}">${d.pct}%</span> <span class="hi-muted">${fmtSize(d.total - d.avail)}/${fmtSize(d.total)}</span></span>`;
-    }).join('');
-    html += `<span class="hi-item hi-disks">💽 磁盘 ${disks}</span>`;
+    const disks = s.disk
+      .map((d) => {
+        const mp = shortenMount(d.mp);
+        if (!mp) return '';
+        const cls = d.pct >= 85 ? 'hi-warn' : (d.pct >= 60 ? 'hi-caution' : 'hi-ok');
+        return `<span class="hi-disk"><span class="hi-muted">${esc(mp)}</span> <span class="${cls}">${d.pct}%</span></span>`;
+      })
+      .filter(Boolean)
+      .slice(0, 4)
+      .join('');
+    if (disks) html += `<span class="hi-chip hi-disks"><span class="hi-label">Disk</span>${disks}</span>`;
   }
   bar.innerHTML = html;
 }

@@ -348,20 +348,20 @@ var Sshterm = window.Sshterm;
 // ---------- 国际化 (中/英) ----------
 var I18N = {
   zh: {
-    btn_new: '＋ 新建连接', btn_local: '⌨ 本地', btn_log: '📋 日志',
-    btn_sftp: '📁 文件', btn_killall: '⏹ 全部关闭', btn_lang: '🌐 EN', btn_split: '⊞ 分屏',
-    btn_broadcast: '⇄ 同步输入', btn_pane_max: '⛶ 铺满',
+    btn_new: '新建', btn_local: '本地', btn_log: '日志',
+    btn_sftp: '文件', btn_killall: '全部关闭', btn_lang: 'EN', btn_split: '分屏',
+    btn_broadcast: '同步输入', btn_pane_max: '铺满',
     dl_title_new: '新建连接', dl_title_edit: '编辑会话',
     dl_conn: '连接', dl_save_conn: '保存并连接', dl_cancel: '取消',
     f_name: '会话名称', f_type: '类型', f_host: '主机', f_port: '端口',
     f_user: '用户名', f_auth: '认证方式', f_password: '密码', f_key: '私钥路径',
     f_passphrase: '密钥口令', f_proxy: '代理', f_proxy_addr: '代理地址',
     t_autologin: '自动登录', s_baud: '波特率', s_hex: 'HEX 显示/发送',
-    sftp_up: '上级', sftp_upload: '上传', sftp_upload_dir: '传文件夹',
+    sftp_up: '上一级', sftp_upload: '上传', sftp_upload_dir: '传文件夹',
     sftp_refresh: '刷新', sftp_close: '关闭', sftp_dl: '下载', sftp_dir_dl: '下载目录',
-    sftp_local_dir: '📂 本地目录', sftp_download_dir: '⬇ 下载当前目录',
-    sftp_multi: '☑ 多选', sftp_multi_exit: '✕ 退出多选', sftp_select_all: '全选',
-    sftp_download_sel: '⬇ 下载选中',
+    sftp_local_dir: '本地目录', sftp_download_dir: '下载当前目录',
+    sftp_multi: '多选', sftp_multi_exit: '退出多选', sftp_select_all: '全选',
+    sftp_download_sel: '下载选中',
     sftp_op_rename: '重命名', sftp_op_delete: '删除', sftp_op_chmod: '权限',
     sftp_rename_prompt: '新名称:', sftp_rename_invalid: '名称无效(不能包含 /)',
     sftp_rename_done: '已重命名',
@@ -372,16 +372,16 @@ var I18N = {
     sftp_chmod_file_only: '权限修改仅支持文件', sftp_chmod_done: '权限已修改',
     sftp_op_failed: '操作失败',
     mfa_jump: '跳板机', mfa_hint: '请输入验证码或多因素认证信息',
-    side_title: '已保存会话', side_batch: '批量', side_foot: '双击连接 · 悬停可编辑/删除',
+    side_title: '会话', side_batch: '批量', side_foot: '双击连接 · 悬停可编辑/删除',
     session_filter: '过滤会话…', hotkeys_title: '快捷键',
     batch_all: '全选', batch_del: '删除选中', batch_cancel: '取消',
-    close_title: '关闭会话?', close_ok: '确认关闭', welcome_p: 'SSH · Telnet · VNC · 串口 一体化连接工具',
+    close_title: '关闭会话?', close_ok: '确认关闭', welcome_p: 'SSH · Telnet · VNC · 串口',
     ws_ok: '服务器已连接', ws_off: '服务器已断开', ws_init: '未连接服务器',
   },
   en: {
-    btn_new: '＋ New', btn_local: '⌨ Local', btn_log: '📋 Log',
-    btn_sftp: '📁 Files', btn_killall: '⏹ Close All', btn_lang: '🌐 中文', btn_split: '⊞ Split',
-    btn_broadcast: '⇄ Broadcast', btn_pane_max: '⛶ Maximize',
+    btn_new: 'New', btn_local: 'Local', btn_log: 'Log',
+    btn_sftp: 'Files', btn_killall: 'Close All', btn_lang: '中文', btn_split: 'Split',
+    btn_broadcast: 'Broadcast', btn_pane_max: 'Maximize',
     dl_title_new: 'New Connection', dl_title_edit: 'Edit Session',
     dl_conn: 'Connect', dl_save_conn: 'Save & Connect', dl_cancel: 'Cancel',
     f_name: 'Name', f_type: 'Type', f_host: 'Host', f_port: 'Port',
@@ -390,9 +390,9 @@ var I18N = {
     t_autologin: 'Auto login', s_baud: 'Baud', s_hex: 'HEX mode',
     sftp_up: 'Up', sftp_upload: 'Upload', sftp_upload_dir: 'Folder',
     sftp_refresh: 'Refresh', sftp_close: 'Close', sftp_dl: 'Download', sftp_dir_dl: 'Download folder',
-    sftp_local_dir: '📂 Local folder', sftp_download_dir: '⬇ Download here',
-    sftp_multi: '☑ Multi', sftp_multi_exit: '✕ Exit multi', sftp_select_all: 'All',
-    sftp_download_sel: '⬇ Download selected',
+    sftp_local_dir: 'Local folder', sftp_download_dir: 'Download folder',
+    sftp_multi: 'Multi', sftp_multi_exit: 'Exit multi', sftp_select_all: 'All',
+    sftp_download_sel: 'Download selected',
     sftp_op_rename: 'Rename', sftp_op_delete: 'Delete', sftp_op_chmod: 'Chmod',
     sftp_rename_prompt: 'New name:', sftp_rename_invalid: 'Invalid name (must not contain /)',
     sftp_rename_done: 'Renamed',
@@ -403,10 +403,10 @@ var I18N = {
     sftp_chmod_file_only: 'Chmod only supports files', sftp_chmod_done: 'Mode changed',
     sftp_op_failed: 'Operation failed',
     mfa_jump: 'Jump host', mfa_hint: 'Enter the verification code or multi-factor credential',
-    side_title: 'Saved Sessions', side_batch: 'Batch', side_foot: 'Double-click to connect · hover to edit/delete',
+    side_title: 'Sessions', side_batch: 'Batch', side_foot: 'Double-click to connect · hover to edit/delete',
     session_filter: 'Filter sessions…', hotkeys_title: 'Hotkeys',
     batch_all: 'All', batch_del: 'Delete', batch_cancel: 'Cancel',
-    close_title: 'Close session?', close_ok: 'Close', welcome_p: 'SSH · Telnet · VNC · Serial all-in-one',
+    close_title: 'Close session?', close_ok: 'Close', welcome_p: 'SSH · Telnet · VNC · Serial',
     ws_ok: 'Server connected', ws_off: 'Server disconnected', ws_init: 'Not connected',
   },
 };
@@ -419,18 +419,22 @@ const DOM_TEXT_EN = {
   '自定义常用快捷键 (保存在本机 localStorage)。点击输入框后按下新组合键。': 'Customize common shortcuts (saved in localStorage). Click a field and press a new combo.',
   '点击后按下新快捷键': 'Click then press a new shortcut',
   'xterm — SSH / Telnet / VNC / 串口': 'xterm — SSH / Telnet / VNC / Serial',
-  '＋ 新建连接': '＋ New Connection', '⌨ 本地': '⌨ Local', '💾 保存会话': '💾 Save Session', '📁 文件': '📁 Files',
-  '🔗 隧道': '🔗 Tunnels', '⏹ 全部关闭': '⏹ Close All', '☰ 工具': '☰ Tools',
-  '📋 操作日志': '📋 Operation Log', '🌐 切换语言': '🌐 Language', '⏱ 定时发送': '⏱ Timed Send',
-  '🔍 端口扫描': '🔍 Port Scan', '⇄ 导入 / 导出会话': '⇄ Import / Export Sessions',
-  '⏺ 开始原始抓包': '⏺ Start Raw Capture', '⏺ 开始会话录制': '⏺ Start Recording',
-  '▶ 导入并回放录制': '▶ Import & Replay Recording', '⊞ 分屏': '⊞ Split', '⛶ 铺满': '⛶ Maximize',
+  '新建': 'New', '本地': 'Local', '文件': 'Files', '隧道': 'Tunnels',
+  '全部关闭': 'Close All', '工具': 'Tools',
+  '操作日志': 'Operation Log', '切换语言': 'Language', '定时发送': 'Timed Send',
+  '端口扫描': 'Port Scan', '导入 / 导出会话': 'Import / Export Sessions',
+  '开始原始抓包': 'Start Raw Capture', '开始会话录制': 'Start Recording',
+  '导入并回放录制': 'Import & Replay Recording', '分屏': 'Split', '铺满': 'Maximize',
   '放到左侧': 'Drop left', '放到右侧': 'Drop right', '放到上方': 'Drop above', '放到下方': 'Drop below',
   '完成': 'Done',
-  '⇄ 同步输入': '⇄ Broadcast', '换行': 'Newline',
-  '▣ 工作区': '▣ Workspace', '⚡ 命令': '⚡ Commands', '已保存会话': 'Saved Sessions',
+  '同步输入': 'Broadcast', '换行': 'Newline',
+  '工作区': 'Workspace', '命令': 'Commands', '设置': 'Settings',
+  '会话': 'Sessions', '已保存会话': 'Saved Sessions',
   '默认': 'Default',
-  '☑ 批量': '☑ Batch', '🔑 SSH 配置': '🔑 SSH Config', '全选': 'Select All',
+  '批量': 'Batch', 'SSH 配置': 'SSH Config', '刷新': 'Refresh', '全选': 'Select All',
+  '上一级': 'Up', '上传': 'Upload', '传文件夹': 'Upload Folder', '多选': 'Multi-select',
+  '下载选中': 'Download selected', '本地目录': 'Local folder', '下载当前目录': 'Download folder',
+  '关闭': 'Close', '暂停队列': 'Pause Queue',
   '删除选中': 'Delete Selected', '取消': 'Cancel', '双击连接 · 悬停可编辑/删除': 'Double-click to connect · hover to edit/delete',
   '双击编辑配置 · 或单击编辑按钮': 'Double-click to edit · or use the edit button',
   '就绪': 'Ready', '未连接服务器': 'Server disconnected', '服务器已连接': 'Server connected',
@@ -446,7 +450,9 @@ const DOM_TEXT_EN = {
   '☑ 多选': '☑ Multi-select', '✕ 退出多选': '✕ Exit multi-select', '全选': 'Select all',
   '⬇ 下载选中': '⬇ Download selected',
   '⬆️传': '⬆ Upload', '📂传': '📂 Upload Folder', '⏸ 暂停队列': '⏸ Pause Queue',
+  'SSH · Telnet · VNC · 串口': 'SSH · Telnet · VNC · Serial',
   'SSH · Telnet · VNC · 串口 一体化连接工具': 'SSH · Telnet · VNC · Serial all-in-one',
+  '新建连接': 'New Connection',
   '新建连接': 'New Connection', '编辑会话': 'Edit Session', '会话名称': 'Session Name',
   '分组': 'Group', '类型': 'Type', '主机': 'Host', '端口': 'Port', '用户名': 'Username',
   '认证方式': 'Authentication', '密码': 'Password', '密钥': 'Key', '私钥路径': 'Private Key Path',
@@ -470,11 +476,14 @@ const DOM_TEXT_EN = {
   '键盘交互/MFA': 'Keyboard Interactive / MFA', 'SSH Agent（含 FIDO2）': 'SSH Agent (including FIDO2)',
   'GBK (嵌入式常见)': 'GBK (common on embedded devices)',
   'SSH 配置 (SSH config)': 'SSH Config', '发现以下 Host 条目 (点击填充表单):': 'Host entries found (click to fill the form):',
-  '关闭': 'Close', '⚠️ 关闭会话?': '⚠️ Close Session?', '确认关闭': 'Confirm Close',
-  '⚡ 快捷命令': '⚡ Quick Commands', '命令名称': 'Command Name', '命令内容': 'Command',
+  '别名': 'Alias',
+  '关闭': 'Close',   '关闭会话?': 'Close Session?', '⚠️ 关闭会话?': '⚠️ Close Session?', '确认关闭': 'Confirm Close',
+  '快捷命令': 'Quick Commands', '⚡ 快捷命令': '⚡ Quick Commands', '命令名称': 'Command Name', '命令内容': 'Command',
   '连接后自动执行此命令集': 'Run This Command Set After Connect', '保存命令': 'Save Command',
-  '执行全部': 'Run All', '🔌 串口被占用': '🔌 Serial Port In Use', '⏳ 等待重试': '⏳ Wait and Retry',
-  '⚡ 强制释放': '⚡ Force Release', '等待重试: 占用方释放后自动连接;强制释放: 重启该串口设备(需管理员确认 UAC),其他程序将断开':
+  '执行全部': 'Run All', '串口被占用': 'Serial Port In Use', '🔌 串口被占用': '🔌 Serial Port In Use',
+  '等待重试': 'Wait and Retry', '⏳ 等待重试': '⏳ Wait and Retry',
+  '强制释放': 'Force Release', '⚡ 强制释放': '⚡ Force Release',
+  '等待重试: 占用方释放后自动连接;强制释放: 重启该串口设备(需管理员确认 UAC),其他程序将断开':
     'Wait and retry after the owner releases the port; force release restarts the device and requires UAC confirmation.',
   '目标': 'Target', '扫描': 'Scan', '单 IP → 全端口扫描;网段(含 / 或 -) → 网络扫描, 发现整个子网设备':
     'Single IP → full port scan; subnet (/ or -) → discover devices across the subnet.',
@@ -499,7 +508,7 @@ const DOM_TEXT_EN = {
   '单会话最多 8 条隧道;端口冲突时会提示失败': 'Up to 8 tunnels per session; port conflicts are reported.',
   '隧道类型': 'Tunnel type',
   '发送内容': 'Content', '周期(毫秒)': 'Interval (ms)', '按 HEX 发送': 'Send as HEX', '立即开始': 'Start Immediately',
-  '开始': 'Start', '停止': 'Stop', '▣ 默认工作区': '▣ Default Workspace',
+  '开始': 'Start', '停止': 'Stop', '默认工作区': 'Default Workspace', '▣ 默认工作区': '▣ Default Workspace',
   '保存或恢复当前打开的会话标签、标签顺序以及分屏布局。恢复时会关闭当前连接并重新建立已保存的会话。':
     'Save or restore open tabs, tab order, and split layout. Restoring reconnects the saved sessions.',
   '尚未保存工作区': 'No Workspace Saved', '保存当前工作区': 'Save Current Workspace',
@@ -525,7 +534,6 @@ const DOM_TEXT_EN = {
   'SSH 多因素认证': 'SSH Multi-Factor Authentication',
   '提交': 'Submit',
   '⚙ 设置': '⚙ Settings',
-  '设置': 'Settings',
   '外观': 'Appearance',
   '这里改终端长什么样。点右下角「应用」后立刻作用到已打开的标签，并保存在这台电脑的浏览器里。':
     'Change how the terminal looks. Click Apply to update open tabs; settings stay in this browser.',
@@ -738,10 +746,10 @@ function fmtDuration(ms) {
   return `${sec}秒`;
 }
 const CPU_SPARK_N = 64;
-const CPU_SPARK_W = 96;
-const CPU_SPARK_H = 16;
-const CPU_SPARK_FILL = '#3ecf8e';
-const CPU_SPARK_STROKE = '#7eecc0';
+const CPU_SPARK_W = 72;
+const CPU_SPARK_H = 14;
+const CPU_SPARK_FILL = 'rgba(91, 159, 212, 0.35)';
+const CPU_SPARK_STROKE = '#5b9fd4';
 
 function cpuSampleValue(hist, i, n) {
   const raw = hist[hist.length - n + i];
@@ -853,11 +861,21 @@ function stopCpuAnim(tab) {
   if (tab._cpuRaf) { cancelAnimationFrame(tab._cpuRaf); tab._cpuRaf = 0; }
 }
 
+function shortenMount(mp) {
+  if (!mp || mp === '/') return '/';
+  const skip = /^\/(sys|proc|dev|run|snap)(\/|$)/;
+  if (skip.test(mp)) return '';
+  if (mp.length <= 16) return mp;
+  const parts = mp.split('/').filter(Boolean);
+  if (parts.length <= 1) return mp.slice(0, 14) + '…';
+  return '…/' + parts[parts.length - 1];
+}
+
 function renderHostInfo(tab, s) {
   const bar = tab.hostinfoBar;
   if (!bar) return;
   if (s.error) {
-    bar.innerHTML = `<span class="hi-item hi-muted">状态采集不可用</span>`;
+    bar.innerHTML = `<span class="hi-chip hi-muted">状态不可用</span>`;
     return;
   }
   const memPct = s.memPct != null ? s.memPct : 0;
@@ -869,19 +887,27 @@ function renderHostInfo(tab, s) {
   const ip = tab.cfg.host || '';
   const name = s.hostname || '';
   let html =
-    `<span class="hi-item"><b>🖥 ${esc(name || ip)}</b> <span class="hi-muted">${esc(ip)}</span></span>` +
-    `<span class="hi-item">💾 RAM <span class="${memCls}">${memPct}%</span> <span class="hi-muted">${fmtSize(s.memUsed)}/${fmtSize(s.memTotal)}</span></span>` +
-    `<span class="hi-item">⚡ 负载 <span class="${memCls}">${s.load1}</span> <span class="hi-muted">(${s.load5}/${s.load15}, ${s.cores}核)</span></span>` +
-    `<span class="hi-item hi-spark-wrap">💻 <span data-cpu-pct class="${cpuCls}">${Math.round(cpuPct)}%</span> ${cpuSparkSvg(cpuHist)}</span>` +
-    `<span class="hi-item">⏱ 连接 <span class="hi-ok">${dur}</span></span>`;
-  // 磁盘/挂载: 列出主要挂载点及用量 (按用量降序, 已取前 5)
+    `<span class="hi-chip"><span class="hi-host">${esc(name || ip || 'host')}</span>` +
+      (name && ip ? `<span class="hi-muted">${esc(ip)}</span>` : '') + `</span>` +
+    `<span class="hi-chip"><span class="hi-label">Up</span><span class="hi-ok">${dur}</span></span>` +
+    `<span class="hi-chip hi-spark-wrap"><span class="hi-label">CPU</span>` +
+      `<span data-cpu-pct class="${cpuCls}">${Math.round(cpuPct)}%</span> ${cpuSparkSvg(cpuHist)}</span>` +
+    `<span class="hi-chip"><span class="hi-label">RAM</span><span class="${memCls}">${memPct}%</span>` +
+      `<span class="hi-muted">${fmtSize(s.memUsed)}/${fmtSize(s.memTotal)}</span></span>` +
+    `<span class="hi-chip"><span class="hi-label">Load</span><span class="${memCls}">${s.load1}</span>` +
+      `<span class="hi-muted">${s.load5}/${s.load15} · ${s.cores}c</span></span>`;
   if (Array.isArray(s.disk) && s.disk.length) {
-    const disks = s.disk.map(d => {
-      const cls = d.pct >= 85 ? 'hi-warn' : (d.pct >= 60 ? 'hi-caution' : 'hi-ok');
-      const mp = d.mp === '/' ? '根/' : d.mp;
-      return `<span class="hi-disk"><span class="hi-muted">${esc(mp)}</span> <span class="${cls}">${d.pct}%</span> <span class="hi-muted">${fmtSize(d.total - d.avail)}/${fmtSize(d.total)}</span></span>`;
-    }).join('');
-    html += `<span class="hi-item hi-disks">💽 磁盘 ${disks}</span>`;
+    const disks = s.disk
+      .map((d) => {
+        const mp = shortenMount(d.mp);
+        if (!mp) return '';
+        const cls = d.pct >= 85 ? 'hi-warn' : (d.pct >= 60 ? 'hi-caution' : 'hi-ok');
+        return `<span class="hi-disk"><span class="hi-muted">${esc(mp)}</span> <span class="${cls}">${d.pct}%</span></span>`;
+      })
+      .filter(Boolean)
+      .slice(0, 4)
+      .join('');
+    if (disks) html += `<span class="hi-chip hi-disks"><span class="hi-label">Disk</span>${disks}</span>`;
   }
   bar.innerHTML = html;
 }
@@ -3859,7 +3885,8 @@ document.addEventListener('keydown', (e) => {
   }
 }, true);
 
-const TYPE_ICON = { ssh: '🖥️', telnet: '🔌', vnc: '🖼️', serial: '🔗', local: '⌨' };
+const TYPE_BADGE = { ssh: 'SSH', telnet: 'TEL', vnc: 'VNC', serial: 'COM', local: 'LOC' };
+const TYPE_ICON = TYPE_BADGE; // legacy alias used by tab labels / close dialogs
 let localShells = [];
 const STATE_TEXT = { connecting: '连接中…', connected: '● 已连接', closed: '✕ 已断开' };
 const SENSITIVE_CONFIG_KEYS = new Set(['password', 'privateKey', 'passphrase', 'loginPass']);
@@ -5201,12 +5228,12 @@ function renderSessionList() {
       row.innerHTML = `
         ${batchMode ? `<input type="checkbox" class="b-cb" data-id="${esc(s.id)}" ${checked}>` : ''}
         ${batchMode ? '' : '<span class="session-drag-handle" title="拖动排序" aria-hidden="true">⠿</span>'}
-        <span class="type-icon">${TYPE_ICON[s.type] || '❔'}</span>
+        <span class="type-badge ${esc(s.type || '')}">${TYPE_BADGE[s.type] || s.type || '?'}</span>
         <span class="s-name">${esc(s.name)}</span>
         <span class="s-sub">${esc(sub)}</span>
         <span class="s-ops">
-          <button title="编辑" data-act="edit">✏️</button>
-          <button title="删除" data-act="del" class="danger">🗑</button>
+          <button title="编辑" data-act="edit">编辑</button>
+          <button title="删除" data-act="del" class="danger">删除</button>
         </span>`;
       row.ondblclick = () => { if (!batchMode) connectTo(s); };
       row.addEventListener('dragstart', (e) => {
@@ -6236,7 +6263,7 @@ $('btn-dlg-save').onclick = () => doConnect(true);
 
 function setStatus(msg) {
   $('sb-left').textContent = msg;
-  $('statusbar').style.color = msg.startsWith('错误') ? '#ef4444' : '';
+  $('statusbar').classList.toggle('is-error', /^错误/.test(msg));
 }
 $('srv-addr').textContent = `localhost${location.port ? ':' + location.port : ''}`;
 
