@@ -8,6 +8,8 @@ $ErrorActionPreference = 'Stop'
 $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 
 function Find-NodeExecutable {
+  $bundledNode = Join-Path $scriptDir 'runtime\node.exe'
+  if (Test-Path -LiteralPath $bundledNode) { return $bundledNode }
   $command = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($null -ne $command -and $command.Source) { return $command.Source }
   $candidates = @(

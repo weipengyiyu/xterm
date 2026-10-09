@@ -65,7 +65,13 @@ async function connected(page) {
 }
 
 async function command(page, marker) {
-  await page.click('.term-host:not(.hidden) .xterm-helper-textarea');
+  // xterm's hidden helper textarea has no stable clickable rectangle. Focus
+  // through its public API before delivering real keyboard events.
+  await page.evaluate(() => {
+    const tab = tabs.find(tab => tab.cfg.type === 'local' && tab.state === 'connected');
+    if (!tab?.term) throw new Error('Connected local terminal is missing');
+    tab.term.focus();
+  });
   await page.keyboard.type(`echo ${marker}`);
   await page.keyboard.press('Enter');
   await page.waitForFunction(marker => tabs.some(tab => {

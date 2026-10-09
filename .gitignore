@@ -2,6 +2,7 @@
 node_modules/
 dist/
 .tools/
+.xterm-install.lock
 
 # 日志
 *.log

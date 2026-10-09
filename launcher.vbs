@@ -28,6 +28,10 @@ End If
 Function FindNode(ws, fso)
   Dim tmp, ts, line, candidates, i
   FindNode = ""
+  If fso.FileExists(base & "\runtime\node.exe") Then
+    FindNode = base & "\runtime\node.exe"
+    Exit Function
+  End If
   tmp = ws.ExpandEnvironmentStrings("%TEMP%") & "\xterm-node-which.txt"
   On Error Resume Next
   fso.DeleteFile tmp, True

@@ -8,6 +8,26 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const serverScript = path.join(root, 'server', 'index.js');
+const logDir = path.join(require('os').homedir(), '.xterm', 'logs');
+fs.mkdirSync(logDir, { recursive: true });
+const stderrLog = path.join(logDir, 'server-stderr.log');
+const proofPaths = new Set();
+let startupResult = null;
+function addProof(argv) {
+  const index = argv.indexOf('--startup-proof');
+  if (index >= 0 && argv[index + 1]) proofPaths.add(argv[index + 1]);
+}
+function reportStartup(result) {
+  startupResult = result;
+  for (const target of proofPaths) {
+    try {
+      fs.writeFileSync(`${target}.tmp`, JSON.stringify(result));
+      fs.renameSync(`${target}.tmp`, target);
+    } catch {}
+  }
+  proofPaths.clear();
+}
+addProof(process.argv);
 
 let mainWindow = null;
 let serverChild = null;
@@ -21,7 +41,9 @@ Menu.setApplicationMenu(null);
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
 
-app.on('second-instance', () => {
+app.on('second-instance', (_event, argv) => {
+  addProof(argv);
+  if (startupResult) reportStartup(startupResult);
   revealOnReady = true;
   if (!mainWindow) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -41,6 +63,8 @@ function parsePort(argv) {
 }
 
 function findNode() {
+  const bundled = path.join(root, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node');
+  if (fs.existsSync(bundled)) return bundled;
   if (process.env.XTERM_NODE && fs.existsSync(process.env.XTERM_NODE)) return process.env.XTERM_NODE;
   if (process.platform === 'win32') {
     const where = spawnSync('where.exe', ['node'], { encoding: 'utf8', windowsHide: true });
@@ -81,21 +105,33 @@ async function ensureServer(port) {
   if (await runningInfo(url)) return url;
   const nodeExe = findNode();
   if (!nodeExe) throw new Error('找不到 Node.js，无法启动终端引擎。');
-  serverChild = spawn(nodeExe, [serverScript, '--port', String(port), '--no-open'], {
-    cwd: root,
-    windowsHide: true,
-    stdio: 'ignore',
-  });
+  const stdout = fs.openSync(path.join(logDir, 'server-stdout.log'), 'a');
+  const stderr = fs.openSync(stderrLog, 'a');
+  let spawnError;
+  try {
+    serverChild = spawn(nodeExe, [serverScript, '--port', String(port), '--no-open'], {
+      cwd: root,
+      windowsHide: true,
+      stdio: ['ignore', stdout, stderr],
+    });
+    serverChild.on('error', error => { spawnError = error; });
+  } finally {
+    fs.closeSync(stdout);
+    fs.closeSync(stderr);
+  }
   serverOwned = true;
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
+    if (spawnError) throw spawnError;
     if (serverChild.exitCode !== null) {
       if (await runningInfo(url)) {
         serverOwned = false;
         serverChild = null;
         return url;
       }
-      throw new Error('终端引擎在启动过程中退出了。');
+      let detail = '';
+      try { detail = fs.readFileSync(stderrLog, 'utf8').trim().split(/\r?\n/).slice(-8).join('\n'); } catch {}
+      throw new Error(`终端引擎在启动过程中退出了。\n${detail}\n日志：${stderrLog}`);
     }
     if (await runningInfo(url)) return url;
     await sleep(200);
@@ -168,6 +204,7 @@ async function start() {
   try {
     url = await ensureServer(port);
   } catch (error) {
+    reportStartup({ ok: false, error: error.message });
     if (process.env.XTERM_PROOF) {
       try { fs.writeFileSync(process.env.XTERM_PROOF, error.message || 'startup-failed'); } catch {}
     } else {
@@ -180,10 +217,12 @@ async function start() {
   if (mainWindow.isVisible()) mainWindow.hide();
   await mainWindow.loadURL(`${url}?_launch=${Date.now()}`);
   const status = await waitUntilConnected(mainWindow);
+  if (!status) throw new Error(`应用窗口未能连接终端引擎。日志：${stderrLog}`);
   if (!mainWindow.isDestroyed()) {
     mainWindow.show();
     mainWindow.focus();
   }
+  reportStartup({ ok: true, port, status });
   if (process.env.XTERM_PROOF) {
     try { fs.writeFileSync(process.env.XTERM_PROOF, status || 'not-connected'); } catch {}
     setTimeout(() => app.quit(), 400);
@@ -198,7 +237,12 @@ app.on('before-quit', stopOwnedServer);
 
 if (gotLock) {
   app.whenReady().then(start).catch(error => {
-    dialog.showErrorBox('xterm', error.message || String(error));
+    reportStartup({ ok: false, error: error.message || String(error) });
+    if (process.env.XTERM_PROOF) {
+      try { fs.writeFileSync(process.env.XTERM_PROOF, error.message || String(error)); } catch {}
+    } else {
+      dialog.showErrorBox('xterm', error.message || String(error));
+    }
     stopOwnedServer();
     app.quit();
   });

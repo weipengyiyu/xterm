@@ -7,15 +7,33 @@
 
 ## 快速开始
 
+### 换电脑使用：离线便携包
+
+Windows 用户优先使用 `dist/xterm-win32-x64-portable-*.zip`：**解压整个 ZIP，打开其中的文件夹，双击 `launcher.vbs`**。也可双击 `run.bat` 查看诊断信息。便携包包含 Node.js、Electron、界面资源和对应平台的原生串口/本机终端组件，不需要管理员权限、预装 Node.js 或首次联网下载。必须一起保留 `runtime`、`node_modules`、`desktop`、`server` 和 `web` 等目录；不要只复制一个启动脚本。
+
+当前 Windows x64 便携包面向 Windows 10 1809 及以后版本、Windows 11。其他操作系统或 CPU 架构必须分别构建匹配的包，不能把 Windows 原生模块复制到 macOS/Linux 使用；系统权限、设备驱动和安全策略仍由目标电脑管理。
+
+在安装完整依赖的目标平台上构建：
+
+```sh
+npm run build:portable
+# Windows x64：验证实际 ZIP 的解压、离线启动、无系统 Node 和原生组件
+npm run test:portable
+```
+
+构建时会验证实际组件和原生模块，生成 ZIP 及保留解压目录。运行时优先使用包内 Node，检测平台和 Node ABI；便携包损坏时提示重新完整解压，不会尝试联网安装。源码启动仍需要系统 Node.js 和首次依赖下载。
+
 ### 首次运行
 
-Windows 首次运行可双击 `launcher.vbs`。启动器会检查 Node.js、在缺少 `node_modules` 时自动安装依赖，然后打开 xterm 自己的窗口。终端引擎在这个应用里启动，不会再打开系统浏览器：
+Windows 源码首次运行可双击 `launcher.vbs`。启动器会检查 Node.js、依赖入口、Electron 可执行文件以及原生模块是否能加载，自动修复残缺依赖，然后打开 xterm 自己的窗口。终端引擎在这个应用里启动，不会再打开系统浏览器：
 
 ```bat
 run.bat
 ```
 
 默认启动后命令窗口退出，后台服务继续运行。需要前台诊断时使用 `run.bat --fg`；这时关闭命令窗口会停止服务。可用 `--no-open` 禁止打开浏览器，或 `--port 8788` 指定端口。
+
+默认端口被其他程序占用时，启动器会自动选择空闲端口；明确传入 `--port` 时保留指定端口。窗口启动后必须实际连接终端服务，启动器才返回成功；引擎退出、窗口启动失败和连接超时都会返回非零退出码并记录具体错误。再次启动只唤醒已存在的窗口，保留已有会话。
 
 Linux / macOS 在项目目录运行：
 
@@ -90,6 +108,8 @@ Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8787/
 ```
 
 如果 `where.exe node` 找不到 Node.js，请先安装 Node.js；如果依赖尚未安装，请运行一次 `run.bat` 或 `npm install`。
+
+源码自动安装会检测无法连接的本地代理，仅对当前安装忽略失效代理，不改写全局 npm 配置。Electron 官方下载不可用时，会重试官方安装文档提供的镜像并保留校验和验证；自定义 `ELECTRON_MIRROR` 会优先保留。受限网络环境请直接使用已构建的离线便携 ZIP。
 
 ## 功能
 

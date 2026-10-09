@@ -2,9 +2,10 @@
 
 const fs = require('fs');
 const http = require('http');
+const net = require('net');
 const os = require('os');
 const path = require('path');
-const { spawn, spawnSync } = require('child_process');
+const { spawn } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 const serverScript = path.join(root, 'server', 'index.js');
@@ -160,7 +161,8 @@ async function verifyBrowserConnection(url) {
   });
 }
 
-function openDesktop(port) {
+async function openDesktop(port) {
+  fs.mkdirSync(logDir, { recursive: true });
   let electronPath = '';
   try {
     const resolved = require('electron');
@@ -169,28 +171,52 @@ function openDesktop(port) {
   if (!electronPath || !fs.existsSync(electronPath)) {
     throw new Error('Desktop window is not installed. Run npm install in the application folder.');
   }
-  const child = spawn(electronPath, [path.join(root, 'desktop', 'main.js'), '--port', String(port)], {
-    cwd: root,
-    detached: true,
-    stdio: 'ignore',
-    env: { ...process.env, XTERM_NODE: process.execPath },
-  });
+  const proofDir = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-startup-'));
+  const proofPath = path.join(proofDir, 'ready.json');
+  const env = { ...process.env, XTERM_NODE: process.execPath };
+  delete env.ELECTRON_RUN_AS_NODE;
+  const stdout = fs.openSync(stdoutLog, 'a');
+  const stderr = fs.openSync(stderrLog, 'a');
+  let child;
+  try {
+    child = spawn(electronPath, [path.join(root, 'desktop', 'main.js'), '--port', String(port), '--startup-proof', proofPath], {
+      cwd: root,
+      detached: true,
+      windowsHide: true,
+      stdio: ['ignore', stdout, stderr],
+      env,
+    });
+  } finally {
+    fs.closeSync(stdout);
+    fs.closeSync(stderr);
+  }
+  let spawnError;
+  child.on('error', error => { spawnError = error; });
   child.unref();
-  log(`Opened application window on port ${port}`);
+  try {
+    const deadline = Date.now() + 60000;
+    while (Date.now() < deadline) {
+      if (fs.existsSync(proofPath)) {
+        const result = JSON.parse(fs.readFileSync(proofPath, 'utf8'));
+        if (!result.ok) throw new Error(result.error || 'Desktop startup failed');
+        log(`Application window connected on port ${port}`);
+        return;
+      }
+      if (spawnError) throw spawnError;
+      if (child.exitCode !== null && child.exitCode !== 0) throw new Error(`Desktop exited (${child.exitCode}): ${stderrTail()}`);
+      await sleep(200);
+    }
+    throw new Error(`Desktop did not confirm a connected window; see ${stderrLog}`);
+  } finally {
+    // Only remove the uniquely created proof file and its empty directory.
+    try { fs.unlinkSync(proofPath); } catch {}
+    try { fs.rmdirSync(proofDir); } catch {}
+  }
 }
 
-function ensureInstalled() {
+async function ensureInstalled(desktop = false) {
   if (!fs.existsSync(serverScript)) throw new Error(`Server script not found: ${serverScript}`);
-  if (fs.existsSync(path.join(root, 'node_modules'))) return;
-  console.log('[FIRST RUN] Installing dependencies...');
-  // npm.cmd needs cmd.exe on Windows. These arguments are fixed; the project
-  // directory is passed separately, never interpolated into a shell command.
-  const install = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['install'], {
-    cwd: root, stdio: 'inherit', windowsHide: true, shell: process.platform === 'win32',
-  });
-  if (install.error || install.status !== 0) {
-    throw new Error(`npm install failed: ${install.error ? install.error.message : install.status}`);
-  }
+  await require('./dependencies').ensureInstalled(root, desktop, message => { console.log(message); log(message); });
 }
 
 async function waitUntilListening(url, child) {
@@ -237,15 +263,36 @@ function parseArgs(argv) {
   return { port, foreground, noBrowser, autoExit };
 }
 
+async function availablePort(preferred) {
+  if (await runningInfo(`http://127.0.0.1:${preferred}/`)) return preferred;
+  const reserve = port => new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', reject);
+    server.listen(port, '127.0.0.1', () => {
+      const selected = server.address().port;
+      server.close(() => resolve(selected));
+    });
+  });
+  try { return await reserve(preferred); }
+  catch (error) {
+    if (!['EADDRINUSE', 'EACCES'].includes(error.code)) throw error;
+    const selected = await reserve(0);
+    log(`Default port ${preferred} is unavailable; using ${selected}.`);
+    return selected;
+  }
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   if (!options) return;
-  const { port, foreground, noBrowser, autoExit } = options;
+  const { foreground, noBrowser, autoExit } = options;
+  const port = process.argv.slice(2).some(arg => arg.toLowerCase() === '--port')
+    ? options.port : await availablePort(options.port);
   const url = `http://127.0.0.1:${port}/`;
 
   if (!foreground && !noBrowser && !autoExit) {
-    ensureInstalled();
-    openDesktop(port);
+    await ensureInstalled(true);
+    await openDesktop(port);
     log('Desktop application started.');
     return;
   }
@@ -260,7 +307,7 @@ async function main() {
     return;
   }
 
-  ensureInstalled();
+  await ensureInstalled();
   if (await runningInfo(url)) {
     await adopt();
     return;
