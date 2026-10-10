@@ -56,6 +56,12 @@ function bindClipboard(tab) {
   const { term, host } = tab;
   if (!term || !host || host._clipBound) return;
   host._clipBound = true;
+  // The viewport/scrollbar can take focus away from xterm's hidden textarea.
+  // Restore it after a primary click without disturbing selection or controls.
+  host.addEventListener('mouseup', (e) => {
+    if (e.button !== 0 || e.target.closest?.('button, input, select, a, .split-divider')) return;
+    term.focus();
+  });
   const keysBound = !!term._keyClipboardBound;
   term._keyClipboardBound = true;
 

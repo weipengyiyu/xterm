@@ -32,5 +32,10 @@ assert(sandbox.eventMatchesHotkey({ ctrlKey:true, metaKey:false, shiftKey:false,
 sandbox.saveHotkeys(Object.assign({}, map, { newConnection: { ctrl:true, shift:true, alt:false, key:'n' } }));
 const next = sandbox.loadHotkeys();
 assert.strictEqual(next.newConnection.shift, true);
+vm.runInNewContext(mod + '\nthis.getHotkeyAction=getHotkeyAction;', sandbox);
+assert.strictEqual(sandbox.getHotkeyAction({ key: ' ', ctrlKey: false }, { newConnection: { key: ' ' } }), null,
+  'a saved plain-space shortcut must not steal terminal input');
+assert.strictEqual(sandbox.getHotkeyAction({ key: 'n', ctrlKey: true, isComposing: true }, map), null,
+  'IME composition must not trigger shortcuts');
 
 console.log('✅ hotkeys contract passed');

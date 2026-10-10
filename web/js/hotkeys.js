@@ -73,6 +73,8 @@ function isTypingTarget(el) {
 }
 
 function getHotkeyAction(e, map) {
+  if (e.isComposing || (!e.ctrlKey && !e.metaKey && !e.altKey &&
+      (String(e.key || '').length === 1 || e.key === 'Enter' || e.key === 'Backspace'))) return null;
   const keys = map || loadHotkeys();
   for (const [action, entry] of Object.entries(keys)) {
     if (eventMatchesHotkey(e, entry)) return action;

@@ -47,6 +47,43 @@ async function waitForServer(deadline = Date.now() + 10000) {
     await page.goto(URL, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => typeof streamDownloadToFile === 'function');
 
+    const inputHost = await page.evaluate(() => {
+      const host = document.createElement('div');
+      host.id = 'input-regression';
+      host.style.cssText = 'position:fixed;top:0;left:0;width:600px;height:180px;z-index:99999;background:black';
+      document.body.appendChild(host);
+      const term = new Terminal({ cols: 60, rows: 8 });
+      term.open(host);
+      bindClipboard({ term, host });
+      window.regressionInput = '';
+      term.onData(data => { window.regressionInput += data; });
+      document.querySelector('#btn-new').focus();
+      return host.id;
+    });
+    await page.click('#' + inputHost);
+    await page.keyboard.type('a b');
+    assert.strictEqual(await page.evaluate(() => window.regressionInput), 'a b', 'click must restore terminal focus and preserve space');
+    await page.evaluate(() => document.getElementById('input-regression').remove());
+
+    const nativeDownloads = await page.evaluate(async () => {
+      window.showDirectoryPicker = undefined;
+      const downloads = [];
+      const original = startNativeDownload;
+      startNativeDownload = (url, name) => downloads.push({ url, name });
+      sftpConnId = 'regression-session';
+      sftpPath = '/tmp';
+      try {
+        renderSftpList([{ name: 'a b.txt', isDir: false, size: 3, mtime: Date.now() }]);
+        document.querySelector('#sftp-list .sftp-name').click();
+        await downloadSftpItem({ name: 'folder', isDir: true }, '/tmp/folder');
+        return downloads;
+      } finally { startNativeDownload = original; }
+    });
+    assert.strictEqual(nativeDownloads.length, 2, 'file click and directory download must work without picker API');
+    assert.strictEqual(nativeDownloads[0].name, 'a b.txt');
+    assert(nativeDownloads[0].url.includes('/api/sftp/download?'));
+    assert(nativeDownloads[1].url.includes('/api/sftp/download-dir?'));
+
     const result = await page.evaluate(async () => {
       const originalFetch = window.fetch;
       const calls = [];

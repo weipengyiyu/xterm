@@ -210,7 +210,7 @@ function sftpRemoteBaseName(remotePath) {
   return idx >= 0 ? p.slice(idx + 1) || 'download' : p;
 }
 
-function sftpScanRemoteDir(remotePath) {
+function sftpScanRemoteDir(remotePath, connId = sftpConnId) {
   return new Promise((resolve, reject) => {
     if (sftpPendingScan) return reject(new Error('已有目录扫描进行中'));
     const timer = setTimeout(() => {
@@ -220,17 +220,21 @@ function sftpScanRemoteDir(remotePath) {
       }
     }, 120000);
     sftpPendingScan = {
-      id: sftpConnId,
+      id: connId,
       resolve: (m) => { clearTimeout(timer); resolve(m); },
       reject: (e) => { clearTimeout(timer); reject(e); },
     };
-    send({ type: 'sftp', id: sftpConnId, action: 'scan', path: remotePath || sftpPath });
+    send({ type: 'sftp', id: connId, action: 'scan', path: remotePath || sftpPath });
   });
 }
 
 async function downloadSftpCurrentDir() {
   if (!sftpConnId || !sftpPath) return setStatus('请先打开文件面板');
   if (activeDownload) return setStatus('已有下载进行中，请先完成或取消');
+  if (!window.showDirectoryPicker) {
+    startNativeDownload(apiUrl('/api/sftp/download-dir', { conn: sftpConnId, path: sftpPath }), sftpRemoteBaseName(sftpPath) + '.zip');
+    return setStatus('已交给浏览器保存目录 ZIP');
+  }
   const localRoot = await ensureSftpDownloadDir();
   if (!localRoot) return;
   await runSftpBatchDownload([{
@@ -293,7 +297,7 @@ function prepareMirrorFileList(scan) {
 
 function newDownloadCtx(task, controller) {
   return {
-    task, controller, doneFiles: 0, totalFiles: 0, loadedBytes: 0, totalBytes: 0,
+    task, controller, connId: sftpConnId, doneFiles: 0, totalFiles: 0, loadedBytes: 0, totalBytes: 0,
     skipped: 0, failedFiles: [], renamedFiles: [],
   };
 }
@@ -303,7 +307,7 @@ async function downloadMirrorFiles(files, targetRoot, label, ctx) {
   ctx.totalBytes += files.reduce((s, f) => s + (f.size || 0), 0);
   for (const file of files) {
     if (ctx.controller.signal.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
-    const url = apiUrl('/api/sftp/download', { conn: sftpConnId, path: file.path });
+    const url = apiUrl('/api/sftp/download', { conn: ctx.connId, path: file.path });
     const fileStart = ctx.loadedBytes;
     try {
       const { handle, localName } = await sftpLocalNestedFileHandle(targetRoot, file.name);
@@ -332,7 +336,7 @@ async function downloadMirrorFiles(files, targetRoot, label, ctx) {
 
 async function downloadRemoteDirMirror(remotePath, localRoot, subfolderName, ctx) {
   showProgress(`扫描远端目录: ${remotePath}`, undefined);
-  const scan = await sftpScanRemoteDir(remotePath);
+  const scan = await sftpScanRemoteDir(remotePath, ctx.connId);
   const { files, skipped } = prepareMirrorFileList(scan);
   ctx.skipped += skipped;
   if (!files.length) return;
@@ -343,7 +347,7 @@ async function downloadRemoteDirMirror(remotePath, localRoot, subfolderName, ctx
 async function downloadRemoteFileMirror(remotePath, localRoot, fileName, ctx) {
   ctx.totalFiles += 1;
   if (ctx.controller.signal.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
-  const url = apiUrl('/api/sftp/download', { conn: sftpConnId, path: remotePath });
+  const url = apiUrl('/api/sftp/download', { conn: ctx.connId, path: remotePath });
   try {
     const { handle, localName } = await sftpLocalNestedFileHandle(localRoot, fileName);
     await streamDownloadToFile(url, Promise.resolve(handle), (loaded, total) => {
@@ -405,7 +409,7 @@ async function runSftpBatchDownload(items, localRoot, taskKind) {
         ctx.failedFiles.push({ name: item.name, error: e.message || String(e) });
       }
     }
-    if (!ctx.totalFiles) {
+    if (!ctx.totalFiles && !ctx.failedFiles.length) {
       $('sftp-progress').classList.add('hidden');
       updateTransferTask(task, undefined, 'done', ctx.skipped ? `空目录，跳过 ${ctx.skipped}` : '空目录');
       return setStatus('所选目录为空或无可下载文件');
@@ -428,6 +432,14 @@ async function runSftpBatchDownload(items, localRoot, taskKind) {
 async function downloadSftpSelected() {
   if (!sftpConnId) return setStatus('请先打开文件面板');
   if (!sftpSelectedItems.size) return setStatus('请先勾选要下载的文件或目录');
+  if (activeDownload) return setStatus('已有下载进行中，请先完成或取消');
+  if (!window.showDirectoryPicker) {
+    for (const item of sftpSelectedItems.values()) {
+      startNativeDownload(apiUrl(item.isDir ? '/api/sftp/download-dir' : '/api/sftp/download',
+        { conn: sftpConnId, path: item.full }), item.name + (item.isDir ? '.zip' : ''));
+    }
+    return setStatus('已交给浏览器保存选中项');
+  }
   const localRoot = await ensureSftpDownloadDir();
   if (!localRoot) return;
   const items = [...sftpSelectedItems.values()];
@@ -440,6 +452,12 @@ async function downloadSftpSelected() {
 
 async function downloadSftpItem(entry, fullPath) {
   if (!sftpConnId) return setStatus('请先打开文件面板');
+  if (activeDownload) return setStatus('已有下载进行中，请先完成或取消');
+  if (!window.showDirectoryPicker) {
+    startNativeDownload(apiUrl(entry.isDir ? '/api/sftp/download-dir' : '/api/sftp/download',
+      { conn: sftpConnId, path: fullPath }), entry.name + (entry.isDir ? '.zip' : ''));
+    return setStatus('已交给浏览器保存: ' + entry.name);
+  }
   const localRoot = await ensureSftpDownloadDir();
   if (!localRoot) return;
   await runSftpBatchDownload([{
@@ -681,7 +699,7 @@ function renderSftpList(entries) {
         toggleSftpSelection(full, e);
         return;
       }
-      if (!e.isDir) return;
+      if (!e.isDir) { downloadSftpItem(e, full); return; }
       sftpPath = full;
       sftpLoad();
     };
