@@ -7,6 +7,12 @@
 
 ## 快速开始
 
+### 下载源码后直接双击（Windows）
+
+下载仓库 ZIP，完整解压后双击 **`启动.cmd`** 或 **`launcher.vbs`**。不需要手动安装 Node.js、运行 npm 命令、安装编译器或配置环境变量。首次启动会显示准备进度，自动下载校验过的 Node.js、应用依赖和 Electron；准备完成后打开应用窗口，命令窗口自动关闭。首次准备需要联网，之后使用本地缓存启动。
+
+支持 Windows 10 1809 及以上和 Windows 11 的 x64/ARM64 电脑；源码目录可以含中文、空格和 `&`。运行时保存在仓库的 `.runtime` 目录，不修改系统 Node 或全局 npm 配置。首次无法联网时可使用下面的完整离线便携包；其他系统使用各自的入口和运行环境。
+
 ### 换电脑使用：离线便携包
 
 Windows 用户优先使用 `dist/xterm-win32-x64-portable-*.zip`：**解压整个 ZIP，打开其中的文件夹，双击 `launcher.vbs`**。也可双击 `run.bat` 查看诊断信息。便携包包含 Node.js、Electron、界面资源和对应平台的原生串口/本机终端组件，不需要管理员权限、预装 Node.js 或首次联网下载。必须一起保留 `runtime`、`node_modules`、`desktop`、`server` 和 `web` 等目录；不要只复制一个启动脚本。
@@ -21,11 +27,11 @@ npm run build:portable
 npm run test:portable
 ```
 
-构建时会验证实际组件和原生模块，生成 ZIP 及保留解压目录。运行时优先使用包内 Node，检测平台和 Node ABI；便携包损坏时提示重新完整解压，不会尝试联网安装。源码启动仍需要系统 Node.js 和首次依赖下载。
+构建时会验证实际组件和原生模块，生成 ZIP 及保留解压目录。运行时优先使用包内 Node，检测平台和 Node ABI；便携包损坏时提示重新完整解压，不会尝试联网安装。
 
 ### 首次运行
 
-Windows 源码首次运行可双击 `launcher.vbs`。启动器会检查 Node.js、依赖入口、Electron 可执行文件以及原生模块是否能加载，自动修复残缺依赖，然后打开 xterm 自己的窗口。终端引擎在这个应用里启动，不会再打开系统浏览器：
+Windows 源码首次运行可双击 `启动.cmd` 或 `launcher.vbs`。启动器会自动准备 Node.js，检查依赖入口、Electron 可执行文件以及原生模块是否能加载，自动修复残缺依赖，然后打开 xterm 自己的窗口。终端引擎在这个应用里启动，不会再打开系统浏览器：
 
 ```bat
 run.bat
@@ -46,7 +52,7 @@ sh ./run.sh
 
 页面启动所需的样式、脚本和字体均来自本地资源或系统字体，不需要访问 Google Fonts。外部字体样式表可能让浏览器等待网络响应，阻塞连接脚本，导致服务已经启动却一直显示“未连接服务器”；当前入口已移除这项依赖。
 
-### 无命令窗口启动（推荐日常使用）
+### 双击应用入口
 
 Windows 双击：
 
@@ -56,7 +62,7 @@ launcher.vbs
 
 启动器会：
 
-- 从自身所在目录查找 Node，直接运行 `scripts/launch.js`（找不到 Node 时再退回 `launch.ps1`），不依赖当前工作目录或写死的安装路径；
+- 通过统一的 `launch.ps1` 自动检查和准备 Node、应用组件，不依赖当前工作目录或写死的安装路径；准备期间显示进度，成功后关闭命令窗口；
 - 打开 xterm 应用窗口，而不是系统浏览器。窗口出现前会先把本机终端引擎拉起来；
 - 同一时刻只允许一个应用实例。再次双击只会把已有窗口带到前面；
 - 引擎已在运行时直接打开窗口，不另起进程，也不会中断已有 SSH 会话；
@@ -93,9 +99,12 @@ npm start
 
 ```text
 %USERPROFILE%\.xterm\logs\launcher.log
+%USERPROFILE%\.xterm\logs\desktop.log
 %USERPROFILE%\.xterm\logs\server-stderr.log
 %USERPROFILE%\.xterm\logs\server-stdout.log
 ```
+
+桌面启动确认通过 Electron 的结构化实例数据传递，并核对每次启动的唯一标识；连续双击、同时启动和唤醒已有窗口也必须确认页面已连接。`desktop.log` 记录实际桌面 PID、请求标识和确认结果，避免命令行参数变化导致把确认文件写到错误的位置。
 
 勾选“记住密码”后，密码使用当前 Windows 用户的 DPAPI 加密保存到
 `%USERPROFILE%\.xterm\secrets.enc`。如果旧版本生成的加密文件已经损坏，编辑会话重新输入一次密码并保存即可重建；之后 launcher 或服务重启都能自动恢复凭据。

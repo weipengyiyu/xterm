@@ -20,7 +20,7 @@ async function main() {
   for (const dir of ['server', 'web', 'desktop', 'scripts']) {
     fs.cpSync(path.join(root, dir), path.join(pkgRoot, dir), { recursive: true });
   }
-  for (const file of ['package.json', 'package-lock.json', 'LICENSE', 'README.md', 'launch.ps1', 'launcher.vbs', 'run.bat', 'run.sh', 'stop.vbs', 'xterm-icon.ico']) {
+  for (const file of ['package.json', 'package-lock.json', 'LICENSE', 'README.md', 'launch.ps1', 'launcher.vbs', 'run.bat', '启动.cmd', 'run.sh', 'stop.vbs', 'xterm-icon.ico']) {
     fs.copyFileSync(path.join(root, file), path.join(pkgRoot, file));
   }
   // Include the installed production dependency graph, excluding build-only

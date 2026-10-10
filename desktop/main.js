@@ -5,29 +5,39 @@ const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
+const os = require('os');
+const protocol = require('./startup-protocol');
 
 const root = path.resolve(__dirname, '..');
 const serverScript = path.join(root, 'server', 'index.js');
-const logDir = path.join(require('os').homedir(), '.xterm', 'logs');
+const logDir = path.join(os.homedir(), '.xterm', 'logs');
 fs.mkdirSync(logDir, { recursive: true });
 const stderrLog = path.join(logDir, 'server-stderr.log');
-const proofPaths = new Set();
+const requests = new Map();
+const applicationPort = parsePort(process.argv);
 let startupResult = null;
-function addProof(argv) {
-  const index = argv.indexOf('--startup-proof');
-  if (index >= 0 && argv[index + 1]) proofPaths.add(argv[index + 1]);
+function desktopLog(message) {
+  try { fs.appendFileSync(path.join(logDir, 'desktop.log'), `${new Date().toISOString()} [${process.pid}] ${message}\n`); } catch {}
+}
+function addRequest(value) {
+  const request = protocol.validRequest(value);
+  if (request) {
+    requests.set(request.id, request);
+    desktopLog(`Received launch ${request.id}`);
+  }
 }
 function reportStartup(result) {
-  startupResult = result;
-  for (const target of proofPaths) {
+  startupResult = { port: applicationPort, ...result, pid: process.pid };
+  for (const request of requests.values()) {
     try {
-      fs.writeFileSync(`${target}.tmp`, JSON.stringify(result));
-      fs.renameSync(`${target}.tmp`, target);
-    } catch {}
+      protocol.writeResponse(request, startupResult);
+      desktopLog(`Replied to launch ${request.id}: ${result.ok ? 'connected' : result.error}`);
+    } catch (error) { desktopLog(`Reply failed for launch ${request.id}: ${error.message}`); }
   }
-  proofPaths.clear();
+  requests.clear();
 }
-addProof(process.argv);
+const initialRequest = protocol.readRequest();
+addRequest(initialRequest);
 
 let mainWindow = null;
 let serverChild = null;
@@ -35,15 +45,23 @@ let serverOwned = false;
 let revealOnReady = false;
 
 app.setName('xterm');
-app.setPath('userData', path.join(app.getPath('home'), '.xterm', 'desktop'));
+app.setPath('userData', path.join(os.homedir(), '.xterm', 'desktop'));
 Menu.setApplicationMenu(null);
 
-const gotLock = app.requestSingleInstanceLock();
+const gotLock = app.requestSingleInstanceLock({ xtermStartupRequest: initialRequest });
+desktopLog(`Single instance lock: ${gotLock}`);
 if (!gotLock) app.quit();
 
-app.on('second-instance', (_event, argv) => {
-  addProof(argv);
-  if (startupResult) reportStartup(startupResult);
+app.on('second-instance', (_event, _argv, _cwd, data) => {
+  // Chromium may reorder/insert command-line switches. The structured payload
+  // is the supported way to preserve the caller's exact request.
+  addRequest(data && data.xtermStartupRequest);
+  if (startupResult) {
+    waitUntilConnected(mainWindow).then(status => {
+      if (status) reportStartup({ ...startupResult, ok: true, status });
+      else reportStartup({ ok: false, error: 'Existing application window is not connected to the engine.' });
+    }).catch(error => reportStartup({ ok: false, error: error.message }));
+  }
   revealOnReady = true;
   if (!mainWindow) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -181,12 +199,13 @@ function createWindow() {
 async function waitUntilConnected(win) {
   const deadline = Date.now() + 15000;
   while (Date.now() < deadline) {
+    if (!win || win.isDestroyed()) return '';
     let status = '';
     try {
-      status = await win.webContents.executeJavaScript(
+      status = await withTimeout(win.webContents.executeJavaScript(
         `document.getElementById('conn-status-text') ? document.getElementById('conn-status-text').textContent : ''`,
         true,
-      );
+      ), 1000, 'Renderer did not answer the readiness check');
     } catch {}
     const text = String(status);
     if (text.includes('已连接') || text.includes('Server connected')) return text;
@@ -195,11 +214,17 @@ async function waitUntilConnected(win) {
   return '';
 }
 
+function withTimeout(promise, timeout, message) {
+  let timer;
+  return Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), timeout); })])
+    .finally(() => clearTimeout(timer));
+}
+
 async function start() {
-  const port = parsePort(process.argv);
+  const port = applicationPort;
   mainWindow = createWindow();
   mainWindow.once('ready-to-show', () => mainWindow.show());
-  await mainWindow.loadFile(path.join(__dirname, 'splash.html'));
+  await withTimeout(mainWindow.loadFile(path.join(__dirname, 'splash.html')), 15000, 'Startup screen failed to load');
   let url;
   try {
     url = await ensureServer(port);
@@ -207,7 +232,7 @@ async function start() {
     reportStartup({ ok: false, error: error.message });
     if (process.env.XTERM_PROOF) {
       try { fs.writeFileSync(process.env.XTERM_PROOF, error.message || 'startup-failed'); } catch {}
-    } else {
+    } else if (!initialRequest) {
       dialog.showErrorBox('xterm', error.message);
     }
     stopOwnedServer();
@@ -215,7 +240,7 @@ async function start() {
     return;
   }
   if (mainWindow.isVisible()) mainWindow.hide();
-  await mainWindow.loadURL(`${url}?_launch=${Date.now()}`);
+  await withTimeout(mainWindow.loadURL(`${url}?_launch=${Date.now()}`), 20000, 'Application page failed to load');
   const status = await waitUntilConnected(mainWindow);
   if (!status) throw new Error(`应用窗口未能连接终端引擎。日志：${stderrLog}`);
   if (!mainWindow.isDestroyed()) {
@@ -223,6 +248,7 @@ async function start() {
     mainWindow.focus();
   }
   reportStartup({ ok: true, port, status });
+  desktopLog(`Window connected on port ${port}`);
   if (process.env.XTERM_PROOF) {
     try { fs.writeFileSync(process.env.XTERM_PROOF, status || 'not-connected'); } catch {}
     setTimeout(() => app.quit(), 400);
@@ -240,7 +266,7 @@ if (gotLock) {
     reportStartup({ ok: false, error: error.message || String(error) });
     if (process.env.XTERM_PROOF) {
       try { fs.writeFileSync(process.env.XTERM_PROOF, error.message || String(error)); } catch {}
-    } else {
+    } else if (!initialRequest) {
       dialog.showErrorBox('xterm', error.message || String(error));
     }
     stopOwnedServer();

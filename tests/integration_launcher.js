@@ -99,7 +99,7 @@ async function exercise(command, args, options) {
   try {
     for (const dir of ['scripts', 'server', 'node_modules']) fs.mkdirSync(path.join(moved, dir), { recursive: true });
     fs.mkdirSync(profile);
-    for (const file of ['scripts/launch.js', 'scripts/dependencies.js', 'server/open-browser.js', 'launch.ps1', 'run.bat', 'run.sh']) {
+    for (const file of ['scripts/launch.js', 'scripts/dependencies.js', 'scripts/bootstrap-node.ps1', 'server/open-browser.js', 'launch.ps1', 'run.bat', 'run.sh']) {
       fs.copyFileSync(path.join(root, file), path.join(moved, file));
     }
     copyDirectory(path.dirname(require.resolve('ws/package.json')), path.join(moved, 'node_modules', 'ws'));

@@ -3,7 +3,33 @@
 const fs = require('fs');
 const path = require('path');
 const net = require('net');
-const { spawnSync } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
+
+function npmCommand(args) {
+  const cli = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
+  return fs.existsSync(cli) ? { command: process.execPath, args: [cli, ...args], shell: false }
+    : { command: process.platform === 'win32' ? 'npm.cmd' : 'npm', args, shell: process.platform === 'win32' };
+}
+function runInstaller(command, args, options = {}) {
+  return new Promise(resolve => {
+    const { timeout = 300000, ...other } = options;
+    // Do not merge the original environment back in: deleted dead proxies must stay deleted.
+    const env = { ...(other.env || process.env) };
+    const pathKey = Object.keys(env).find(key => key.toLowerCase() === 'path');
+    const searchPath = env.PATH || env[pathKey] || '';
+    for (const key of Object.keys(env).filter(key => key.toLowerCase() === 'path')) delete env[key];
+    env.PATH = `${path.dirname(process.execPath)}${path.delimiter}${searchPath}`;
+    const child = spawn(command, args, { ...other, env, windowsHide: true, stdio: 'inherit' });
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      if (process.platform === 'win32') spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+      else child.kill();
+    }, timeout);
+    child.once('error', error => { clearTimeout(timer); resolve({ error, status: 1 }); });
+    child.once('exit', status => { clearTimeout(timer); resolve({ status, error: timedOut ? new Error('Installation timed out') : null }); });
+  });
+}
 
 function probe(root, desktop = true) {
   const portable = path.join(root, 'portable.json');
@@ -56,17 +82,23 @@ function reachable(proxy) {
 
 async function installEnvironment(root, log = console.log) {
   const env = { ...process.env };
-  const args = ['install', '--no-audit', '--no-fund', '--fetch-retries=1', '--fetch-timeout=30000'];
+  const args = ['install', '--omit=dev', '--no-audit', '--no-fund', '--foreground-scripts',
+    `--ignore-scripts=${process.platform === 'win32' ? 'true' : 'false'}`, '--fetch-retries=1', '--fetch-timeout=30000',
+    '--registry=https://registry.npmjs.org', '--replace-registry-host=always'];
   let deadProxy = false;
   for (const key of Object.keys(env).filter(key => /^(https?_proxy|all_proxy|npm_config_(https_)?proxy)$/i.test(key))) {
     if (env[key] && !(await reachable(env[key]))) { delete env[key]; deadProxy = true; }
   }
   for (const key of ['proxy', 'https-proxy']) {
-    const config = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['config', 'get', key], {
-      cwd: root, env, encoding: 'utf8', windowsHide: true, shell: process.platform === 'win32', timeout: 10000,
+    const npm = npmCommand(['config', 'get', key]);
+    const config = spawnSync(npm.command, npm.args, {
+      cwd: root, env, encoding: 'utf8', windowsHide: true, shell: npm.shell, timeout: 10000,
     });
     const value = String(config.stdout || '').trim();
-    if (value && value !== 'null' && !(await reachable(value))) deadProxy = true;
+    if (value && value !== 'null') {
+      if (!(await reachable(value))) deadProxy = true;
+      else env[key === 'https-proxy' ? 'HTTPS_PROXY' : 'HTTP_PROXY'] = value;
+    }
   }
   if (deadProxy) {
     // Override only this install; never change the user's global npm settings.
@@ -75,6 +107,7 @@ async function installEnvironment(root, log = console.log) {
     env.npm_config_https_proxy = '';
     log('Ignoring an unreachable local proxy for this dependency installation.');
   }
+  if (env.HTTPS_PROXY || env.HTTP_PROXY) env.ELECTRON_GET_USE_PROXY = '1';
   return { env, args };
 }
 
@@ -86,37 +119,30 @@ async function repairInstalled(root, desktop, log = console.log) {
   }
   log(`Repairing incomplete dependencies: ${failure}`);
   const { env, args } = await installEnvironment(root, log);
-  const run = () => spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', args, {
-    cwd: root, env, stdio: 'inherit', windowsHide: true, shell: process.platform === 'win32', timeout: 300000,
-  });
-  let result = run();
-  // GitHub can be inaccessible even when the npm registry works. Keep the
-  // official checksum validation and respect an explicitly configured mirror.
-  if ((result.error || result.status !== 0) && !env.ELECTRON_MIRROR && desktop) {
-    env.ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/';
-    log('Retrying Electron download using the mirror documented by Electron.');
-    result = run();
+  const npmEnv = { ...env, ELECTRON_SKIP_BINARY_DOWNLOAD: '1' };
+  const run = installArgs => {
+    const command = npmCommand(installArgs);
+    return runInstaller(command.command, command.args, { cwd: root, env: npmEnv, shell: command.shell });
+  };
+  let result = await run(args);
+  if (result.error || result.status !== 0) {
+    log('Retrying dependency download using the npm mirror.');
+    result = await run([...args, '--registry=https://registry.npmmirror.com']);
   }
-  // npm can leave an installed package whose binary postinstall never ran.
-  if (!result.error && result.status === 0 && desktop && check(root, true)) {
-    const installer = path.join(root, 'node_modules', 'electron', 'install.js');
-    if (fs.existsSync(installer)) result = spawnSync(process.execPath, [installer], {
-      cwd: root, env, stdio: 'inherit', windowsHide: true, timeout: 300000,
-    });
-    if ((result.error || result.status !== 0) && !env.ELECTRON_MIRROR && fs.existsSync(installer)) {
-      env.ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/';
-      log('Retrying the missing Electron binary using the documented mirror.');
-      result = spawnSync(process.execPath, [installer], {
-        cwd: root, env, stdio: 'inherit', windowsHide: true, timeout: 300000,
-      });
+  // Windows packages ship native prebuilds. Avoid compiler hooks and their
+  // cmd shims, which break when the repository path contains an ampersand.
+  if (!result.error && result.status === 0 && process.platform === 'win32') {
+    const installer = path.join(root, 'node_modules', 'node-pty', 'scripts', 'post-install.js');
+    if (fs.existsSync(installer)) {
+      log('Preparing prebuilt Windows terminal components.');
+      result = await runInstaller(process.execPath, [installer], { cwd: root, env: npmEnv });
     }
   }
-  if (!result.error && result.status === 0 && check(root, desktop)) {
-    // A copied dependency tree or a changed Node ABI can require native rebuilds
-    // even when npm reports all packages as already installed.
-    result = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['rebuild'], {
-      cwd: root, env, stdio: 'inherit', windowsHide: true, shell: process.platform === 'win32', timeout: 300000,
-    });
+  if (!result.error && result.status === 0 && desktop) {
+    result = await runInstaller(process.execPath, [path.join(__dirname, 'install-electron.js'), root], { cwd: root, env });
+  }
+  if (!result.error && result.status === 0 && process.platform !== 'win32' && check(root, desktop)) {
+    result = await run(['rebuild', '--foreground-scripts', '--ignore-scripts=false']);
   }
   const remaining = check(root, desktop);
   if (result.error || result.status !== 0 || remaining) {
@@ -153,7 +179,7 @@ async function ensureInstalled(root, desktop, log = console.log) {
   finally { try { fs.unlinkSync(lock); } catch {} }
 }
 
-module.exports = { probe, check, reachable, installEnvironment, ensureInstalled };
+module.exports = { probe, check, reachable, installEnvironment, ensureInstalled, npmCommand, runInstaller };
 if (require.main === module && process.argv[2] === '--probe') {
   try { probe(process.argv[3], process.argv[4] === 'desktop'); }
   catch (error) { console.error(error.message); process.exitCode = 1; }

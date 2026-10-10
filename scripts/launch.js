@@ -172,14 +172,16 @@ async function openDesktop(port) {
     throw new Error('Desktop window is not installed. Run npm install in the application folder.');
   }
   const proofDir = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-startup-'));
-  const proofPath = path.join(proofDir, 'ready.json');
-  const env = { ...process.env, XTERM_NODE: process.execPath };
+  const protocol = require('../desktop/startup-protocol');
+  const request = protocol.createRequest(proofDir);
+  const proofPath = request.path;
+  const env = { ...process.env, XTERM_NODE: process.execPath, XTERM_STARTUP_REQUEST: JSON.stringify(request) };
   delete env.ELECTRON_RUN_AS_NODE;
   const stdout = fs.openSync(stdoutLog, 'a');
   const stderr = fs.openSync(stderrLog, 'a');
   let child;
   try {
-    child = spawn(electronPath, [path.join(root, 'desktop', 'main.js'), '--port', String(port), '--startup-proof', proofPath], {
+    child = spawn(electronPath, [path.join(root, 'desktop', 'main.js'), '--port', String(port)], {
       cwd: root,
       detached: true,
       windowsHide: true,
@@ -196,20 +198,23 @@ async function openDesktop(port) {
   try {
     const deadline = Date.now() + 60000;
     while (Date.now() < deadline) {
-      if (fs.existsSync(proofPath)) {
-        const result = JSON.parse(fs.readFileSync(proofPath, 'utf8'));
+      const result = protocol.readResponse(request);
+      if (result) {
         if (!result.ok) throw new Error(result.error || 'Desktop startup failed');
-        log(`Application window connected on port ${port}`);
+        if (!Number.isInteger(result.pid) || !Number.isInteger(result.port) || !result.status) throw new Error('Incomplete desktop readiness response');
+        await verifyBrowserConnection(`http://127.0.0.1:${result.port}/`);
+        log(`Application window connected on port ${result.port}; desktop PID ${result.pid}; launch ${request.id}`);
         return;
       }
       if (spawnError) throw spawnError;
       if (child.exitCode !== null && child.exitCode !== 0) throw new Error(`Desktop exited (${child.exitCode}): ${stderrTail()}`);
       await sleep(200);
     }
-    throw new Error(`Desktop did not confirm a connected window; see ${stderrLog}`);
+    throw new Error(`Desktop did not confirm a connected window; launch ${request.id}; see ${path.join(logDir, 'desktop.log')}`);
   } finally {
     // Only remove the uniquely created proof file and its empty directory.
     try { fs.unlinkSync(proofPath); } catch {}
+    try { fs.unlinkSync(`${proofPath}.${request.id}.tmp`); } catch {}
     try { fs.rmdirSync(proofDir); } catch {}
   }
 }

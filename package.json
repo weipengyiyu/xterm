@@ -18,6 +18,8 @@
     "build:exe": "node scripts/build-exe.js",
     "build:portable": "node scripts/build-portable.js",
     "test:dependencies": "node tests/dependency_recovery.js",
+    "test:desktop": "node tests/desktop_startup_protocol.js && node tests/desktop_relaunch.js",
+    "test:source-bootstrap": "node tests/source_bootstrap.js",
     "test:portable": "node tests/portable_startup.js",
     "test:package": "node tests/smoke_packaged_exe.js",
     "sync:web": "node scripts/sync-web-app.js"

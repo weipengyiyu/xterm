@@ -25,7 +25,7 @@ assert.doesNotMatch(launcher.slice(launcher.indexOf('// Use file descriptors')),
 assert.match(launcher, /path\.resolve\(__dirname, '\.\.'\)/,
   'project paths must be resolved from the script location');
 assert.match(powershell, /\$PSScriptRoot/);
-assert.match(batch, /%~dp0scripts\\launch\.js/);
+assert.match(batch, /%~dp0launch\.ps1/);
 assert.match(batch, /%\*/,'batch must forward startup arguments');
 assert.match(shell, /dirname -- "\$0"/);
 assert.match(shell, /"\$@"/,'shell must preserve argument boundaries');
