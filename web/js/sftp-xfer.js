@@ -4,6 +4,7 @@ window.Xterm = window.Xterm || {};
 var Xterm = window.Xterm;
 // ---------- SFTP 传输 (XHR + 进度条, 大文件不卡页面) ----------
 let _progLast = 0;
+let progressHideTimer = null;
 const transferTasks = [];
 let uploadQueuePaused = false;
 const UPLOAD_CHUNK_BYTES = 64 * 1024 * 1024;
@@ -51,7 +52,10 @@ function renderTransferTasks() {
     + list.map((t) => {
       let html = `<div class="sftp-task ${esc(t.state)}"><span>${esc(t.kind)}</span>`
         + `<span class="sftp-task-name">${esc(t.name)}</span>`
-        + `<span>${t.state === 'running' ? Math.round(t.pct) + '%' : esc(t.detail || t.state)}</span></div>`;
+        + `<span>${t.state === 'running' ? (t.pct == null ? esc(t.detail || '准备中') : Math.round(t.pct) + '%') : esc(t.detail || t.state)}</span></div>`;
+      if (t.state === 'running') {
+        html += `<div class="sftp-task-progress"><div class="${t.pct == null ? 'indeterminate' : ''}" style="width:${t.pct == null ? 35 : Math.max(0, Math.min(100, t.pct))}%"></div></div>`;
+      }
       if (t.failedFiles?.length) {
         html += t.failedFiles.map((f) =>
           `<div class="sftp-task-failure" title="${esc(f.error)}">`
@@ -69,23 +73,31 @@ async function sha256File(file) {
   return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 function showProgress(text, pct) {
+  clearTimeout(progressHideTimer);
+  progressHideTimer = null;
+  $('sftp-progress-fill').classList.remove('done');
   const now = Date.now();
   if (now - _progLast < 80 && pct !== undefined && pct < 100) return;  // 节流 80ms
   _progLast = now;
   $('sftp-progress').classList.remove('hidden');
   $('sftp-progress-text').textContent = text;
   $('sftp-progress-fill').classList.toggle('indeterminate', pct === undefined);
+  $('sftp-progress-bar').setAttribute('role', 'progressbar');
+  $('sftp-progress-bar').setAttribute('aria-label', text);
+  if (pct === undefined) $('sftp-progress-bar').removeAttribute('aria-valuenow');
+  else $('sftp-progress-bar').setAttribute('aria-valuenow', String(Math.min(100, Math.round(pct))));
   if (pct !== undefined) {
     $('sftp-progress-fill').style.width = Math.min(100, Math.round(pct)) + '%';
   }
 }
 function doneProgress(text) {
+  clearTimeout(progressHideTimer);
   _progLast = 0;
   $('sftp-progress-fill').classList.remove('indeterminate');
   $('sftp-progress-fill').classList.add('done');
   $('sftp-progress-fill').style.width = '100%';
   $('sftp-progress-text').textContent = text;
-  setTimeout(() => {
+  progressHideTimer = setTimeout(() => {
     $('sftp-progress').classList.add('hidden');
     $('sftp-progress-fill').classList.remove('done');
     $('sftp-progress-fill').style.width = '0%';
@@ -141,7 +153,11 @@ async function streamDownloadToFile(url, handlePromise, onProg, retries = 3, opt
         const response = await fetch(url, { headers, signal: controller.signal });
         if (response.status === 412) throw new Error('远端文件已变更，无法续传');
         if (response.status === 416) {
-          if (total > 0 && received === total) break;
+          if (total > 0 && received === total) {
+            await writable.close();
+            committed = true;
+            return { saved: true, size: received, remoteIdentity };
+          }
           throw new Error('续传范围无效');
         }
         if (!response.ok || !response.body) throw new Error(`下载请求失败: ${response.status}`);
@@ -150,6 +166,7 @@ async function streamDownloadToFile(url, handlePromise, onProg, retries = 3, opt
         const range = response.headers.get('Content-Range');
         const length = Number(response.headers.get('Content-Length') || 0);
         total = range ? Number(range.split('/')[1]) : (length || total);
+        if (onProg) onProg(received, total);
         if (received > 0) await writable.seek(received);
         const reader = response.body.getReader();
         while (true) {

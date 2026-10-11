@@ -411,7 +411,7 @@ function createWsMessageHandler(ctx) {
     case 'sftp': {
       const conn = getConnection(ws, m.id);
       if (!conn || conn.config.type !== 'ssh') {
-        return send(ws, { type: 'error', id: m.id, action: 'sftp', msg: 'SFTP 需要活跃的 SSH 连接' });
+        return send(ws, { type: 'error', id: m.id, action: 'sftp', requestId: m.requestId, msg: 'SFTP 需要活跃的 SSH 连接' });
       }
       if (m.action === 'list') {
         try {
@@ -431,14 +431,14 @@ function createWsMessageHandler(ctx) {
           const symlinks = (collected.files || []).filter((f) => f.isSymlink).length;
           const skippedDirs = Array.isArray(collected.skipped) ? collected.skipped.length : 0;
           send(ws, {
-            type: 'sftp', id: m.id, action: 'scan', path: listed.path,
+            type: 'sftp', id: m.id, action: 'scan', requestId: m.requestId, path: listed.path,
             files: (collected.files || []).filter((f) => !f.isSymlink).map((f) => ({
               path: f.path, name: f.name, size: f.size,
             })),
             skipped: symlinks + skippedDirs,
           });
         } catch (e) {
-          send(ws, { type: 'error', id: m.id, action: 'sftp', msg: `SFTP: ${e.message}` });
+          send(ws, { type: 'error', id: m.id, action: 'sftp', requestId: m.requestId, msg: `SFTP: ${e.message}` });
         }
       }
       break;

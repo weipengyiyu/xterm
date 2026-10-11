@@ -915,6 +915,10 @@ function handleMsg(m) {
     }
     case 'error': {
       sftpBusy = false;
+      if (m.action === 'sftp' && sftpPendingScan?.id === m.id
+          && sftpPendingScan.requestId === m.requestId) {
+        sftpPendingScan.reject(new Error(m.msg));
+      }
       if (m.occupied) { showOccDlg(m); break; }
       let tab = tabs.find(t => t.id === m.id);
       let pane = null;
@@ -984,6 +988,14 @@ function handleMsg(m) {
       break;
     }
     case 'sftp': {
+      if (m.action === 'scan') {
+        const waiter = sftpPendingScan;
+        if (waiter?.id === m.id && waiter.requestId === m.requestId) {
+          if (m.error) waiter.reject(new Error(m.error));
+          else waiter.resolve(m);
+        }
+        break;
+      }
       if (m.id !== sftpConnId) break;
       if (m.action === 'cwd') {
         // 定位到 shell 当前目录 (cwd 失败则回退 home)
@@ -995,13 +1007,6 @@ function handleMsg(m) {
         sftpPath = m.path;              // 服务端 realpath 后的绝对路径
         $('sftp-path').value = m.path;
         renderSftpList(m.entries);
-      } else if (m.action === 'scan') {
-        if (sftpPendingScan && sftpPendingScan.id === m.id) {
-          const waiter = sftpPendingScan;
-          sftpPendingScan = null;
-          if (m.error) waiter.reject(new Error(m.error));
-          else waiter.resolve(m);
-        }
       }
       break;
     }
@@ -1901,6 +1906,7 @@ function closeSearch() {
   $('search-bar').classList.add('hidden');
   $('search-input').value = '';
   $('search-count').textContent = '';
+  focusActiveTerminal();
 }
 function doSearch(dir = 1) {
   const tab = tabs.find(t => t.id === activeTabId);
@@ -2579,7 +2585,7 @@ $('openssh-import').onclick = async () => {
   catch (e) { setStatus(e.message); }
 };
 $('btn-sftp').onclick = toggleSftpPanel;
-$('sftp-pick-download-dir').onclick = () => { pickSftpDownloadDir(); };
+$('sftp-pick-download-dir').onclick = () => { pickSftpDownloadDir().catch(() => {}); };
 $('sftp-download-current-dir').onclick = () => { downloadSftpCurrentDir(); };
 $('sftp-toggle-select').onclick = () => { toggleSftpSelectMode(); };
 $('sftp-select-all').onclick = () => { selectAllSftpEntries(); };

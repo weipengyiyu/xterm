@@ -78,6 +78,11 @@ function diagnostic() {
     const cold = await run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c',
       `""${path.join(project, '启动.cmd')}" --port ${port}"`], { windowsVerbatimArguments: true });
     assert.strictEqual(cold.code, 0, cold.output + diagnostic());
+    // The double-click CMD entry now hands off to wscript and exits immediately.
+    // Readiness is still the actual connected desktop, not the handoff's exit.
+    const readyDeadline = Date.now() + 600000;
+    while (!fs.existsSync(proof) && Date.now() < readyDeadline) await sleep(200);
+    assert(fs.existsSync(proof), diagnostic());
     assert.match(fs.readFileSync(proof, 'utf8'), /已连接|Server connected/, diagnostic());
     assert(fs.existsSync(path.join(project, '.runtime', 'node-v24.21.0-win-' + process.arch, 'node.exe')));
     assert(fs.existsSync(path.join(project, 'node_modules', 'electron', 'dist', 'electron.exe')));

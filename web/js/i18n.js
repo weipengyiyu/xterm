@@ -103,6 +103,8 @@ const DOM_TEXT_EN = {
   '名称': 'Name', '大小': 'Size', '修改': 'Modified',
   '📂 本地目录': '📂 Local Folder', '⬇ 下载当前目录': '⬇ Download Folder',
   '未选择（下载前需指定）': 'Not selected (pick a folder before download)',
+  '未选择（下载时选择保存目录）': 'Not selected (choose a folder when downloading)',
+  '由浏览器保存': 'Saved by browser',
   '本地目录:': 'Local folder:',
   '下载失败': 'Download Failed',
   '已选': 'Selected', '项 · 目录将递归下载全部文件': '· folders download all files recursively',

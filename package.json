@@ -19,6 +19,8 @@
     "build:portable": "node scripts/build-portable.js",
     "test:dependencies": "node tests/dependency_recovery.js",
     "test:desktop": "node tests/desktop_startup_protocol.js && node tests/desktop_relaunch.js",
+    "test:download": "node tests/ui_large_download_stream.js && node tests/desktop_sftp_download.js && node tests/integration_sftp_transport.js",
+    "test:input": "node tests/ui_terminal_input_focus.js && node tests/theme_settings_contract.js && node tests/hotkeys_contract.js && node tests/split_drag_contract.js",
     "test:source-bootstrap": "node tests/source_bootstrap.js",
     "test:portable": "node tests/portable_startup.js",
     "test:package": "node tests/smoke_packaged_exe.js",

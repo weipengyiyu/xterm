@@ -84,6 +84,88 @@ async function waitForServer(deadline = Date.now() + 10000) {
     assert(nativeDownloads[0].url.includes('/api/sftp/download?'));
     assert(nativeDownloads[1].url.includes('/api/sftp/download-dir?'));
 
+    const pickerResult = await page.evaluate(async () => {
+      sftpDownloadDirHandle = null;
+      let pickerCalls = 0;
+      let finishPicker;
+      const outputs = [];
+      const dir = { name: 'downloads', queryPermission: async () => 'granted',
+        async getDirectoryHandle() { throw new Error('not found'); },
+        async getFileHandle(name) {
+          return { async createWritable() {
+            return { async write(value) { outputs.push(...value); }, async close() {}, async abort() {} };
+          } };
+        } };
+      window.showDirectoryPicker = () => {
+        pickerCalls++;
+        return new Promise(resolve => { finishPicker = resolve; });
+      };
+      const originalFetch = window.fetch;
+      const calls = [];
+      window.fetch = async url => {
+        calls.push(url);
+        let part = 0;
+        return new Response(new ReadableStream({ async pull(controller) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          if (part++ < 2) controller.enqueue(new Uint8Array([1, 2]));
+          else controller.close();
+        } }), { headers: { 'Content-Length': '4' } });
+      };
+      try {
+        sftpConnId = 'original-session';
+        const pending = downloadSftpItem({ name: 'sample.txt', isDir: false }, '/source/sample.txt');
+        await downloadSftpItem({ name: 'duplicate.txt', isDir: false }, '/source/duplicate.txt');
+        const visibleWhilePicking = !$('sftp-progress').classList.contains('hidden');
+        const sharedPicker = pickSftpDownloadDir();
+        sftpConnId = 'changed-session';
+        finishPicker(dir);
+        await sharedPicker;
+        await new Promise(resolve => setTimeout(resolve, 160));
+        const during = { pct: transferTasks[0].pct, text: $('sftp-progress-text').textContent,
+          width: $('sftp-progress-bar').getBoundingClientRect().width };
+        await pending;
+        // An old completion timer must not hide the next download's progress.
+        showProgress('next download', 10);
+        await new Promise(resolve => setTimeout(resolve, 2700));
+        return { pickerCalls, calls, outputs, during, visibleWhilePicking,
+          stillVisible: !$('sftp-progress').classList.contains('hidden'), state: transferTasks[0].state };
+      } finally { window.fetch = originalFetch; sftpDownloadDirHandle = null; }
+    });
+    assert.strictEqual(pickerResult.pickerCalls, 1, 'rapid clicks must share one folder dialog');
+    assert.strictEqual(pickerResult.calls.length, 1, 'rapid clicks must not duplicate the download');
+    assert(pickerResult.calls[0].includes('conn=original-session'), 'source connection must be captured before choosing folder');
+    assert.strictEqual(pickerResult.during.pct, 50, 'single file task must show real percentage');
+    assert(pickerResult.during.text.includes('50%'), 'single file progress text must show percentage');
+    assert.strictEqual(pickerResult.visibleWhilePicking, true, 'download preparation must be visible');
+    assert.strictEqual(pickerResult.stillVisible, true, 'old completion timer must not hide a new transfer');
+    assert.deepStrictEqual(pickerResult.outputs, [1, 2, 1, 2]);
+    assert.strictEqual(pickerResult.state, 'done');
+
+    const scanResult = await page.evaluate(async () => {
+      const originalSend = send;
+      const sent = [];
+      send = m => sent.push(m);
+      try {
+        const controller = new AbortController();
+        const cancelled = sftpScanRemoteDir('/folder', 'source', controller.signal).catch(e => e.name);
+        const oldRequest = sent[0].requestId;
+        controller.abort();
+        const cancelledName = await cancelled;
+        const next = sftpScanRemoteDir('/other', 'source');
+        const currentRequest = sent[1].requestId;
+        sftpConnId = 'changed-tab';
+        handleMsg({ type: 'sftp', action: 'scan', id: 'source', requestId: oldRequest, files: [{ name: 'stale' }] });
+        const staleIgnored = sftpPendingScan?.requestId === currentRequest;
+        handleMsg({ type: 'sftp', action: 'scan', id: 'source', requestId: currentRequest, files: [{ name: 'correct' }] });
+        const received = await next;
+        const failed = sftpScanRemoteDir('/missing', 'source').catch(e => e.message);
+        handleMsg({ type: 'error', action: 'sftp', id: 'source', requestId: sent[2].requestId, msg: 'permission denied' });
+        return { cancelledName, staleIgnored, received: received.files[0].name, error: await failed, released: !sftpPendingScan };
+      } finally { send = originalSend; }
+    });
+    assert.deepStrictEqual(scanResult, { cancelledName: 'AbortError', staleIgnored: true,
+      received: 'correct', error: 'permission denied', released: true });
+
     const result = await page.evaluate(async () => {
       const originalFetch = window.fetch;
       const calls = [];
@@ -132,6 +214,27 @@ async function waitForServer(deadline = Date.now() + 10000) {
     assert.deepStrictEqual(result.download, { saved: true, size: 10, remoteIdentity: '' }, 'direct-to-disk result');
     assert.strictEqual(result.closed, true, 'successful file must be committed');
     assert.strictEqual(result.aborted, false, 'successful file must not be aborted');
+    await page.setViewport({ width: 1440, height: 900 });
+    const layout = await page.evaluate(() => {
+      $('sftp-panel').classList.remove('hidden');
+      $('terms').classList.add('sftp-open');
+      $('sftp-local-list').innerHTML = '';
+      renderSftpList([{ name: 'sample.bin', isDir: false, size: 1048576, mtime: Date.now() }]);
+      $('sftp-path').value = '/home/linux/wp';
+      const task = newTransferTask('下载', 'sample.bin');
+      updateTransferTask(task, 50);
+      _progLast = 0;
+      showProgress('下载: sample.bin 50% · 512.0KB / 1.0MB', 50);
+      $('sftp-cancel-transfer').classList.remove('hidden');
+      return { width: $('sftp-progress-bar').getBoundingClientRect().width,
+        overflow: $('sftp-progress').scrollWidth > $('sftp-progress').clientWidth };
+    });
+    assert(layout.width > 150, 'download bar must remain visible in file panel');
+    assert.strictEqual(layout.overflow, false, 'download text must fit the panel');
+    const screenshot = path.join(ROOT, '.tools', 'download-progress.png');
+    fs.mkdirSync(path.dirname(screenshot), { recursive: true });
+    await sleep(150);
+    await page.screenshot({ path: screenshot });
     console.log('✅ large download direct-to-disk browser contract passed');
   } finally {
     if (browser) await browser.close();

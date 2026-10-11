@@ -1,12 +1,13 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, Menu } = require('electron');
+const { app, BrowserWindow, dialog, Menu, ipcMain } = require('electron');
 const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const os = require('os');
 const protocol = require('./startup-protocol');
+const { installDownloadFiles } = require('./download-files');
 
 const root = path.resolve(__dirname, '..');
 const serverScript = path.join(root, 'server', 'index.js');
@@ -43,6 +44,7 @@ let mainWindow = null;
 let serverChild = null;
 let serverOwned = false;
 let revealOnReady = false;
+let engineOrigin = '';
 
 app.setName('xterm');
 app.setPath('userData', path.join(os.homedir(), '.xterm', 'desktop'));
@@ -174,11 +176,13 @@ function createWindow() {
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
     },
   });
+  installDownloadFiles(win, { ipcMain, dialog }, () => engineOrigin);
   win.setMenuBarVisibility(false);
   win.on('page-title-updated', (event) => {
     event.preventDefault();
@@ -228,6 +232,7 @@ async function start() {
   let url;
   try {
     url = await ensureServer(port);
+    engineOrigin = new URL(url).origin;
   } catch (error) {
     reportStartup({ ok: false, error: error.message });
     if (process.env.XTERM_PROOF) {

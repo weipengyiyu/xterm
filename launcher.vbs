@@ -9,11 +9,11 @@ If Not fso.FileExists(base & "\launch.ps1") Then
   MsgBox "Extract the complete repository before launching xterm.", 16, "xterm"
   WScript.Quit 1
 End If
-cmd = """" & powershell & """ -NoLogo -NoProfile -ExecutionPolicy Bypass -File """ & base & "\launch.ps1" & """"
+cmd = """" & powershell & """ -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & base & "\launch.ps1" & """"
 For Each arg In WScript.Arguments
   cmd = cmd & " """ & Replace(arg, """", """""") & """"
 Next
-code = ws.Run(cmd, 1, True)
+code = ws.Run(cmd, 0, True)
 If code <> 0 Then
   If ws.Environment("PROCESS")("XTERM_PROOF") = "" And ws.Environment("PROCESS")("XTERM_TEST_NO_DIALOG") <> "1" Then
     MsgBox "Startup failed (exit " & code & ")." & vbCrLf & _

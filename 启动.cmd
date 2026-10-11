@@ -1,3 +1,3 @@
 @echo off
-call "%~dp0run.bat" %*
+start "" "%SystemRoot%\System32\wscript.exe" "%~dp0launcher.vbs" %*
 exit /b %ERRORLEVEL%

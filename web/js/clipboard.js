@@ -21,6 +21,7 @@ function copySelection(term) {
   return true;
 }
 function pasteClipboard(term) {
+  term.focus();
   if (_clipBusy) return;
   _clipBusy = true;
   const timer = setTimeout(() => {
@@ -52,13 +53,29 @@ function safeSendInput(id, data, encoding) {
   sendInput(id, data, encoding);
   return true;
 }
+function focusActiveTerminal() {
+  // Closing a panel should return keys to the last clicked pane, while open
+  // dialogs and search fields keep their own input focus.
+  if (document.querySelector('[id$="-mask"]:not(.hidden)')
+      || !$('search-bar')?.classList.contains('hidden')) return;
+  const tab = tabs.find(t => t.id === activeTabId);
+  if (!tab || tab.cfg.type === 'vnc') return;
+  const remembered = tab._focusTarget;
+  const target = remembered && (remembered === tab || tab.extraPanes?.includes(remembered))
+    ? remembered : tab;
+  try { target.term?.focus(); } catch {}
+}
 function bindClipboard(tab) {
   const { term, host } = tab;
-  if (!term || !host || host._clipBound) return;
-  host._clipBound = true;
+  if (!term || !host) return;
+  // Main tab.host is the split container. Binding to that container makes its
+  // mouseup handler steal focus from every child split terminal.
+  const inputHost = term.element?.closest('.term-host') || host;
+  if (inputHost._clipBound) return;
+  inputHost._clipBound = true;
   // The viewport/scrollbar can take focus away from xterm's hidden textarea.
   // Restore it after a primary click without disturbing selection or controls.
-  host.addEventListener('mouseup', (e) => {
+  inputHost.addEventListener('mouseup', (e) => {
     if (e.button !== 0 || e.target.closest?.('button, input, select, a, .split-divider')) return;
     term.focus();
   });
@@ -81,7 +98,7 @@ function bindClipboard(tab) {
     }
     return inStorm();
   };
-  host.addEventListener('mouseup', (e) => {
+  inputHost.addEventListener('mouseup', (e) => {
     if (e.button !== 0) return;
     if (markClick()) return;            // 风暴中: 直接忽略, 不产生任何定时器
     clearTimeout(tab._copyTimer);
@@ -94,8 +111,9 @@ function bindClipboard(tab) {
   });
 
   // 2. 右键粘贴。选中文本已在鼠标松开时复制。
-  host.addEventListener('contextmenu', (e) => {
+  inputHost.addEventListener('contextmenu', (e) => {
     e.preventDefault();
+    term.focus();
     if (inStorm()) return;
     try { if (term.textarea) term.textarea.value = ''; } catch (err) { /* 忽略 */ }
     pasteClipboard(term);
