@@ -122,7 +122,7 @@ function addPane(tab, dir = 'row', ratio = 0.5, opts = {}) {
   setStatus('已分屏');
   applySplitLayout(tab, dir, ratio);
   scheduleTabsSave();
-  setTimeout(() => { if (tabs.includes(tab)) tab.term.focus(); }, 100);
+  if (tab.id === activeTabId) focusActiveTerminal();
 }
 
 function removePane(tab, pane) {
@@ -132,9 +132,11 @@ function removePane(tab, pane) {
   pane.host.remove();
   const i = tab.extraPanes.indexOf(pane);
   if (i >= 0) tab.extraPanes.splice(i, 1);
+  if (tab._focusTarget === pane) tab._focusTarget = tab;
   if (tab.extraPanes.length === 0) applySplitLayout(tab, 'none', 1);
   else applySplitLayout(tab, splitDirection(tab), splitRatio(tab));
   scheduleTabsSave();
+  if (tab.id === activeTabId) focusActiveTerminal();
 }
 
 function applyGridRatios(tab) {

@@ -57,22 +57,157 @@ function focusActiveTerminal() {
   // Closing a panel should return keys to the last clicked pane, while open
   // dialogs and search fields keep their own input focus.
   if (document.querySelector('[id$="-mask"]:not(.hidden)')
-      || !$('search-bar')?.classList.contains('hidden')) return;
+      || document.getElementById('xterm-display-prompt')
+      || (!$('search-bar')?.classList.contains('hidden') && document.activeElement?.closest('#search-bar'))) return;
   const tab = tabs.find(t => t.id === activeTabId);
   if (!tab || tab.cfg.type === 'vnc') return;
   const remembered = tab._focusTarget;
   const target = remembered && (remembered === tab || tab.extraPanes?.includes(remembered))
     ? remembered : tab;
-  try { target.term?.focus(); } catch {}
+  try {
+    target.term?.focus();
+    if (document.activeElement === target.term?.textarea) return target;
+  } catch {}
+}
+function bindTerminalFocusRecovery() {
+  if (bindTerminalFocusRecovery.bound) return;
+  bindTerminalFocusRecovery.bound = true;
+  let pending = null;
+  let allowControlFocus = false;
+  let pointerDown = false;
+  let keyboardNavigation = false;
+  const recover = (preferred) => {
+    if (pointerDown || !document.hasFocus() || document.hidden) return;
+    if (document.querySelector('#menu-more:not(.hidden), #menu-local:not(.hidden), #sftp-ctx-menu')) return;
+    const active = document.activeElement;
+    // Keep live form fields and keyboard navigation intact. A field inside a
+    // closed dialog may still be active, but must no longer receive input.
+    if (active?.matches('.xterm textarea')) {
+      const widget = active.closest('.xterm');
+      // A native window blur can leave activeElement pointing at the textarea
+      // while xterm still renders its inactive outline. Reestablish real focus
+      // events, without interrupting an IME composition already in progress.
+      if (!widget.classList.contains('focus') && !widget.querySelector('.composition-view.active')) {
+        active.blur();
+        active.focus({ preventScroll: true });
+      }
+      return;
+    }
+    if ((active?.matches('input, textarea, select') || active?.isContentEditable)
+        && active.getClientRects().length) return;
+    if (keyboardNavigation && active?.getClientRects().length && active.closest('button, a, [tabindex]')) return;
+    if (preferred) {
+      const owner = owningSessionTab(preferred);
+      if (!owner || owner.id !== activeTabId) return;
+      owner._focusTarget = preferred;
+    }
+    return focusActiveTerminal();
+  };
+  document.addEventListener('focusin', (e) => {
+    if (e.target.matches?.('.xterm textarea')) keyboardNavigation = false;
+  });
+  const terminalKeys = new Set(['Enter', 'Backspace', 'Delete', 'Tab', 'Escape',
+    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', 'Insert']);
+  document.addEventListener('keydown', (e) => {
+    if (e.defaultPrevented) return;
+    if (e.target.matches?.('.xterm textarea')) { recover(); return; }
+    if (e.key === 'Tab' && e.target.closest?.('button, a, input, textarea, select, [contenteditable], [tabindex]')) {
+      keyboardNavigation = true;
+      return;
+    }
+    // App/browser shortcuts retain their normal routing. Bare typing and shell
+    // editing keys recover any unknown focus loss, not just known UI actions.
+    if (getHotkeyAction(e) || (e.altKey && /^[1-9]$/.test(e.key))) return;
+    const nativeInput = e.isComposing || e.keyCode === 229 || e.key === 'Dead' || e.key === 'AltGraph' || e.getModifierState('AltGraph')
+      || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') || (e.shiftKey && e.key === 'Insert');
+    if (!nativeInput && e.key.length !== 1 && !terminalKeys.has(e.key)) return;
+    const target = recover();
+    if (!target || target.cfg?.readonly || target.cfg?.type === 'replay') return;
+    const textarea = target.term.textarea;
+    // The original event keeps its old DOM path after focus changes. Deliver
+    // this first key through xterm's normal handlers, including application
+    // cursor modes and clipboard shortcuts, rather than hardcoding escape codes.
+    e.stopImmediatePropagation();
+    if (nativeInput) return; // Browser paste/IME/dead-key default uses the new focus.
+    e.preventDefault();
+    const init = {
+      key: e.key, code: e.code, keyCode: e.keyCode, charCode: e.charCode,
+      location: e.location, repeat: e.repeat, ctrlKey: e.ctrlKey, altKey: e.altKey,
+      shiftKey: e.shiftKey, metaKey: e.metaKey, bubbles: true, cancelable: true,
+      modifierAltGraph: e.getModifierState('AltGraph'), modifierCapsLock: e.getModifierState('CapsLock'),
+    };
+    const forwarded = new KeyboardEvent('keydown', init);
+    textarea.dispatchEvent(forwarded);
+    // Space and uppercase letters are handled by xterm on keypress. Canceling
+    // the original keydown suppresses that browser event, so supply it once.
+    if (!forwarded.defaultPrevented && !e.ctrlKey && !e.altKey && !e.metaKey && e.key.length === 1) {
+      textarea.dispatchEvent(new KeyboardEvent('keypress', { ...init, charCode: e.key.charCodeAt(0) }));
+    }
+  }, true);
+  const schedule = (blankOnly = false) => {
+    allowControlFocus ||= !blankOnly;
+    if (pending !== null) return;
+    // Run after the click's handlers and browser default focus action. Restoring
+    // on mousedown or in a microtask can be undone by that default action.
+    pending = setTimeout(() => {
+      pending = null;
+      const shouldRecover = allowControlFocus || document.activeElement === document.body;
+      allowControlFocus = false;
+      if (shouldRecover) recover();
+    }, 0);
+  };
+  const restoresAfterClick = e => e.target.closest?.('#toolbar button')
+    || !e.target.closest?.('button, a, input, textarea, select, [contenteditable], [tabindex]');
+  document.addEventListener('click', (e) => {
+    if (restoresAfterClick(e)) schedule();
+  }, true);
+  document.addEventListener('click', (e) => {
+    // Button focus happens on mousedown. Recover after its action immediately,
+    // before the user can type the first key; the timer covers stopped events.
+    if (restoresAfterClick(e)) recover();
+  });
+  document.addEventListener('focusout', () => schedule(true));
+  document.addEventListener('pointerdown', () => { pointerDown = true; keyboardNavigation = false; }, true);
+  document.addEventListener('pointerup', (e) => {
+    pointerDown = false;
+    if (e.target.closest?.('.split-divider, #sidebar-divider, #sftp-divider, #sftp-columns-divider')) {
+      recover(); schedule();
+    }
+  }, true);
+  document.addEventListener('pointercancel', () => { pointerDown = false; schedule(true); }, true);
+  window.addEventListener('blur', () => { pointerDown = false; });
+  window.addEventListener('focus', () => { recover(); schedule(); });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) schedule();
+  });
+  // All dialog/panel close paths (including Escape and asynchronous closes)
+  // share this rule, so a new close button cannot silently forget focus again.
+  // Observe only their visibility, not the frequently changing terminal DOM.
+  const observer = new MutationObserver((records) => {
+    if (records.some(r => r.type === 'attributes'
+      ? !String(r.oldValue || '').split(/\s+/).includes('hidden') && r.target.classList.contains('hidden')
+      : [...r.removedNodes].some(n => n.id === 'xterm-display-prompt' || n.id === 'sftp-ctx-menu'))) recover();
+  });
+  document.querySelectorAll('[id$="-mask"], #search-bar, #menu-more, #menu-local, #sftp-panel')
+    .forEach(el => observer.observe(el, { attributes: true, attributeFilter: ['class'], attributeOldValue: true }));
+  observer.observe(document.body, { childList: true });
+  // Native dialogs, extensions and asynchronous UI code can move focus without
+  // any of the events above. Detect that idle state too; keydown recovery keeps
+  // the first key safe even before this bounded check runs.
+  window.setInterval(() => recover(), 250);
+  // Expose only the guarded recovery operation for each pane's pointer handler.
+  bindTerminalFocusRecovery.recover = recover;
 }
 function bindClipboard(tab) {
   const { term, host } = tab;
   if (!term || !host) return;
+  bindTerminalFocusRecovery();
   // Main tab.host is the split container. Binding to that container makes its
   // mouseup handler steal focus from every child split terminal.
   const inputHost = term.element?.closest('.term-host') || host;
   if (inputHost._clipBound) return;
   inputHost._clipBound = true;
+  inputHost.addEventListener('pointermove', () => bindTerminalFocusRecovery.recover(tab));
   // The viewport/scrollbar can take focus away from xterm's hidden textarea.
   // Restore it after a primary click without disturbing selection or controls.
   inputHost.addEventListener('mouseup', (e) => {

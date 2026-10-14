@@ -212,7 +212,7 @@ function showDisplayPrompt() {
   overlay.appendChild(box);
   document.body.appendChild(overlay);
   input.focus();
-  const close = () => overlay.remove();
+  const close = () => { overlay.remove(); focusActiveTerminal(); };
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.preventDefault(); close(); }
     else if (e.key === 'Enter') {
@@ -1365,12 +1365,12 @@ function activateTab(id) {
   for (const t of tabs) {
     t.host.classList.toggle('hidden', t.id !== id);
     if (t.id === id) setTimeout(() => {
+      if (activeTabId !== t.id || !tabs.includes(t)) return;
       if (t.cfg.type === 'vnc') { try { t.rfb?.focus(); } catch {} }
       else {
         scheduleFit(t);
         scheduleVisibleDraws(t);
-        const focus = t._focusTarget && t._focusTarget.term ? t._focusTarget : t;
-        try { focus.term.focus(); } catch {}
+        focusActiveTerminal();
       }
     }, 0);
   }
