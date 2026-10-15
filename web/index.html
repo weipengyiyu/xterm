@@ -21,6 +21,7 @@
         <div id="menu-local" class="hidden"></div>
       </div>
       <button id="btn-sftp" title="SSH 文件浏览/下载 (SFTP)">文件</button>
+      <button id="btn-rustdesk" class="rustdesk-open-btn" title="打开 RustDesk 客户端">RustDesk</button>
       <button id="btn-tunnel" title="SSH 隧道管理" class="hidden">隧道</button>
     </div>
     <span class="sep"></span>
@@ -593,6 +594,12 @@
           </div>
         </section>
         <section id="settings-page-rustdesk" class="settings-page hidden" data-settings-page="rustdesk">
+          <div class="rustdesk-client-actions">
+            <button type="button" id="set-rustdesk-open" class="primary">打开 RustDesk</button>
+            <button type="button" id="set-rustdesk-tray">显示托盘图标</button>
+          </div>
+          <p class="settings-hint">直接打开客户端窗口，无需先开启后台服务。</p>
+          <p id="set-rustdesk-client-status" class="settings-hint" role="status" aria-live="polite"></p>
           <p class="settings-lead">管理运行 xterm 的这台电脑上的 RustDesk 后台服务。开关立即生效，无需点「应用」。</p>
           <div class="settings-row">
             <div class="settings-copy">
@@ -602,7 +609,6 @@
             <div class="settings-control">
               <label class="settings-switch"><input id="set-rustdesk-service" type="checkbox" role="switch" disabled><span>启用后台服务</span></label>
               <button type="button" id="set-rustdesk-refresh" class="mini">刷新状态</button>
-              <button type="button" id="set-rustdesk-tray" class="mini" disabled>显示托盘图标</button>
             </div>
           </div>
           <p id="set-rustdesk-status" class="settings-hint" role="status" aria-live="polite">正在读取服务状态…</p>

@@ -356,6 +356,7 @@ var Xterm = window.Xterm;
 // ---------- 国际化 (中/英) ----------
 var I18N = {
   zh: {
+    rd_client_opened: '已发送打开 RustDesk 客户端请求，请查看 RustDesk 窗口。', rd_client_failed: '打开 RustDesk 失败：',
     rd_service_reading: '正在读取服务状态…', rd_service_changing: '正在切换服务，请完成 Windows 管理员授权…',
     rd_service_unsupported: '后台服务开关目前仅支持 Windows。', rd_service_missing: '未安装服务，开启后将安装并启动 RustDesk。',
     rd_service_running: '后台服务运行中', rd_service_stopped: '后台服务已停止', rd_service_transition: '服务正在切换状态，请稍后刷新。',
@@ -395,6 +396,7 @@ var I18N = {
     ws_ok: '服务器已连接', ws_off: '服务器已断开', ws_init: '未连接服务器',
   },
   en: {
+    rd_client_opened: 'RustDesk open request sent. Check its window.', rd_client_failed: 'Failed to open RustDesk: ',
     rd_service_reading: 'Reading service status…', rd_service_changing: 'Changing service state. Complete the Windows administrator prompt…',
     rd_service_unsupported: 'The service switch currently supports Windows only.', rd_service_missing: 'Service not installed. Enabling will install and start RustDesk.',
     rd_service_running: 'Background service running', rd_service_stopped: 'Background service stopped', rd_service_transition: 'Service state is changing. Refresh shortly.',
@@ -439,6 +441,8 @@ var I18N = {
 // hidden. WeakMaps retain the original Chinese key so language switching is
 // reversible, while the observer also covers controls rendered later.
 const DOM_TEXT_EN = {
+  '打开 RustDesk': 'Open RustDesk',
+  '直接打开客户端窗口，无需先开启后台服务。': 'Open the client window directly. The background service is optional.',
   '显示托盘图标': 'Show tray icon',
   '管理运行 xterm 的这台电脑上的 RustDesk 后台服务。开关立即生效，无需点「应用」。': 'Manage the RustDesk background service on the computer running xterm. Changes take effect immediately.',
   '后台服务': 'Background service', '启用后台服务': 'Enable background service', '刷新状态': 'Refresh status',
@@ -604,6 +608,7 @@ const DOM_TEXT_EN = {
 };
 
 const DOM_ATTR_EN = {
+  '打开 RustDesk 客户端': 'Open the RustDesk client',
   '如: 123 456 789': 'e.g. 123 456 789',
   '留空自动检测已安装的 RustDesk': 'Leave blank to detect the installed RustDesk client',
   '过滤会话…': 'Filter sessions…',
@@ -4327,6 +4332,7 @@ function onWsOpen() {
 }
 
 function onWsClose(ev) {
+  if (typeof finishRustDeskClient === 'function' && rustdeskClientRequest) finishRustDeskClient(t('ws_off'));
   if (typeof resetRustDeskServiceUi === 'function') resetRustDeskServiceUi();
   clearTimeout(wsConnectTimer);
   outputHoldSent = false;
@@ -4790,6 +4796,10 @@ function handleMsg(m) {
     case 'local-shells': {
       localShells = Array.isArray(m.shells) ? m.shells : [];
       renderLocalShells();
+      break;
+    }
+    case 'rustdesk-open': {
+      if (m.requestId === rustdeskClientRequest) finishRustDeskClient(m.ok ? t('rd_client_opened') : `${t('rd_client_failed')}${m.error}`);
       break;
     }
     case 'rustdesk-service': {
@@ -6608,6 +6618,33 @@ updateSftpSelectUi();
 let rustdeskServiceRequest = null;
 let rustdeskServiceState = null;
 let rustdeskServiceTimer = null;
+let rustdeskClientRequest = null;
+let rustdeskClientTimer = null;
+
+function finishRustDeskClient(message) {
+  clearTimeout(rustdeskClientTimer);
+  rustdeskClientRequest = null;
+  $('btn-rustdesk').disabled = false;
+  $('set-rustdesk-open').disabled = false;
+  $('set-rustdesk-client-status').textContent = message;
+  setStatus(message);
+}
+
+function openRustDeskClientWindow() {
+  if (rustdeskClientRequest) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) return finishRustDeskClient(t('ws_off'));
+  rustdeskClientRequest = crypto.randomUUID();
+  $('btn-rustdesk').disabled = true;
+  $('set-rustdesk-open').disabled = true;
+  $('set-rustdesk-client-status').textContent = t('rd_starting');
+  setStatus(t('rd_starting'));
+  send({ type: 'rustdesk-open', requestId: rustdeskClientRequest,
+    clientPath: $('set-rustdesk-path').value.trim() || rustdeskServiceState?.clientPath || '' });
+  rustdeskClientTimer = setTimeout(() => finishRustDeskClient(t('rd_service_timeout')), 20000);
+}
+
+$('btn-rustdesk').onclick = openRustDeskClientWindow;
+$('set-rustdesk-open').onclick = openRustDeskClientWindow;
 
 function paintRustDeskService(error = '') {
   const toggle = $('set-rustdesk-service');
@@ -6616,7 +6653,7 @@ function paintRustDeskService(error = '') {
   toggle.checked = !!service?.running;
   toggle.disabled = pending || !service?.supported || !!service?.busy;
   $('set-rustdesk-refresh').disabled = pending;
-  $('set-rustdesk-tray').disabled = pending || !service?.supported || !service?.running || !!service?.busy;
+  $('set-rustdesk-tray').disabled = pending || !!service?.busy;
   $('set-rustdesk-path').disabled = pending;
   $('set-rustdesk-pick').disabled = pending;
   let key = !service ? 'rd_service_reading' : !service.supported ? 'rd_service_unsupported'

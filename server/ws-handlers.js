@@ -5,7 +5,7 @@ const { randomUUID } = require('crypto');
 const { createBackup, readBackup, parseOpenSSHConfig } = require('./session-backup');
 const { connectionConfigForRequest, connectionTargetsMatch } = require('./connection-config');
 const { sanitizeSession } = require('./session-schema');
-const { resolveRustDesk, launchRustDesk } = require('./rustdesk-launcher');
+const { resolveRustDesk, launchRustDesk, openRustDeskClient } = require('./rustdesk-launcher');
 const rustdeskService = require('./rustdesk-service').createRustDeskServiceController();
 const { isScanAllowed, expandTarget, parseIPv4, isPrivateIPv4 } = require('./net-scan');
 
@@ -34,6 +34,16 @@ function createWsMessageHandler(ctx) {
     const LOG_FILE = ctx.getLogFile();
 
   switch (m.type) {
+    case 'rustdesk-open': {
+      const requestId = typeof m.requestId === 'string' ? m.requestId.slice(0, 120) : '';
+      try {
+        const result = await openRustDeskClient(typeof m.clientPath === 'string' ? m.clientPath : '');
+        send(ws, { type: 'rustdesk-open', requestId, ok: true, ...result });
+      } catch (error) {
+        send(ws, { type: 'rustdesk-open', requestId, ok: false, error: error.message });
+      }
+      break;
+    }
     case 'rustdesk-service': {
       const requestId = typeof m.requestId === 'string' ? m.requestId.slice(0, 120) : '';
       try {

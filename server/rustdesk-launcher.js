@@ -65,6 +65,13 @@ async function launchRustDeskTray(clientPath = '', options = {}) {
   return { clientPath: executable };
 }
 
+async function openRustDeskClient(clientPath = '', options = {}) {
+  const executable = await resolveRustDesk(clientPath, options);
+  if (!executable) throw new Error('未找到 RustDesk 客户端，请选择客户端后重试');
+  await startRustDesk(executable, [], options, '无法打开 RustDesk 客户端，请检查文件和运行权限');
+  return { clientPath: executable };
+}
+
 async function startRustDesk(clientPath, args, options, errorMessage) {
   const start = options.spawn || spawn;
   await new Promise((resolve, reject) => {
@@ -77,4 +84,4 @@ async function startRustDesk(clientPath, args, options, errorMessage) {
   });
 }
 
-module.exports = { normalizeRustDeskId, resolveRustDesk, launchRustDesk, launchRustDeskTray };
+module.exports = { normalizeRustDeskId, resolveRustDesk, launchRustDesk, launchRustDeskTray, openRustDeskClient };

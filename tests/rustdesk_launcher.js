@@ -5,7 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { EventEmitter } = require('events');
-const { resolveRustDesk, launchRustDesk, launchRustDeskTray } = require('../server/rustdesk-launcher');
+const { resolveRustDesk, launchRustDesk, launchRustDeskTray, openRustDeskClient } = require('../server/rustdesk-launcher');
 const { sanitizeSession } = require('../server/session-schema');
 const { installRustDeskPicker } = require('../desktop/rustdesk-picker');
 
@@ -38,6 +38,15 @@ const { installRustDeskPicker } = require('../desktop/rustdesk-picker');
     assert.strictEqual(invocation.spawnOptions.shell, false);
     assert.strictEqual(invocation.spawnOptions.detached, true);
     assert.strictEqual(invocation.spawnOptions.cwd, dir);
+    await openRustDeskClient(clientPath, { ...options, spawn: (file, args, spawnOptions) => {
+      assert.strictEqual(file, clientPath);
+      assert.deepStrictEqual(args, [], 'opening the client does not require a remote ID or service command');
+      assert.strictEqual(spawnOptions.windowsHide, false);
+      assert.strictEqual(spawnOptions.shell, false);
+      const child = new EventEmitter(); child.unref = () => {};
+      process.nextTick(() => child.emit('spawn'));
+      return child;
+    } });
     await launchRustDeskTray(clientPath, { ...options, spawn: (file, args, spawnOptions) => {
       assert.strictEqual(file, clientPath);
       assert.deepStrictEqual(args, ['--tray']);

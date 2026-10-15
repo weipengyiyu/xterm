@@ -352,6 +352,7 @@ function onWsOpen() {
 }
 
 function onWsClose(ev) {
+  if (typeof finishRustDeskClient === 'function' && rustdeskClientRequest) finishRustDeskClient(t('ws_off'));
   if (typeof resetRustDeskServiceUi === 'function') resetRustDeskServiceUi();
   clearTimeout(wsConnectTimer);
   outputHoldSent = false;
@@ -815,6 +816,10 @@ function handleMsg(m) {
     case 'local-shells': {
       localShells = Array.isArray(m.shells) ? m.shells : [];
       renderLocalShells();
+      break;
+    }
+    case 'rustdesk-open': {
+      if (m.requestId === rustdeskClientRequest) finishRustDeskClient(m.ok ? t('rd_client_opened') : `${t('rd_client_failed')}${m.error}`);
       break;
     }
     case 'rustdesk-service': {
@@ -2633,6 +2638,33 @@ updateSftpSelectUi();
 let rustdeskServiceRequest = null;
 let rustdeskServiceState = null;
 let rustdeskServiceTimer = null;
+let rustdeskClientRequest = null;
+let rustdeskClientTimer = null;
+
+function finishRustDeskClient(message) {
+  clearTimeout(rustdeskClientTimer);
+  rustdeskClientRequest = null;
+  $('btn-rustdesk').disabled = false;
+  $('set-rustdesk-open').disabled = false;
+  $('set-rustdesk-client-status').textContent = message;
+  setStatus(message);
+}
+
+function openRustDeskClientWindow() {
+  if (rustdeskClientRequest) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) return finishRustDeskClient(t('ws_off'));
+  rustdeskClientRequest = crypto.randomUUID();
+  $('btn-rustdesk').disabled = true;
+  $('set-rustdesk-open').disabled = true;
+  $('set-rustdesk-client-status').textContent = t('rd_starting');
+  setStatus(t('rd_starting'));
+  send({ type: 'rustdesk-open', requestId: rustdeskClientRequest,
+    clientPath: $('set-rustdesk-path').value.trim() || rustdeskServiceState?.clientPath || '' });
+  rustdeskClientTimer = setTimeout(() => finishRustDeskClient(t('rd_service_timeout')), 20000);
+}
+
+$('btn-rustdesk').onclick = openRustDeskClientWindow;
+$('set-rustdesk-open').onclick = openRustDeskClientWindow;
 
 function paintRustDeskService(error = '') {
   const toggle = $('set-rustdesk-service');
@@ -2641,7 +2673,7 @@ function paintRustDeskService(error = '') {
   toggle.checked = !!service?.running;
   toggle.disabled = pending || !service?.supported || !!service?.busy;
   $('set-rustdesk-refresh').disabled = pending;
-  $('set-rustdesk-tray').disabled = pending || !service?.supported || !service?.running || !!service?.busy;
+  $('set-rustdesk-tray').disabled = pending || !!service?.busy;
   $('set-rustdesk-path').disabled = pending;
   $('set-rustdesk-pick').disabled = pending;
   let key = !service ? 'rd_service_reading' : !service.supported ? 'rd_service_unsupported'

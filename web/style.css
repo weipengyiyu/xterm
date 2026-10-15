@@ -119,6 +119,10 @@ button.mini { padding: 2px 8px; font-size: 11px; }
 .type-badge.telnet { color: #8fb7d8; }
 .type-badge.vnc { color: #9ad4b8; }
 .type-badge.rustdesk { color: #e7a0a0; }
+.rustdesk-open-btn { border-color: #7aa2f7; color: #a9c7ff; }
+.rustdesk-client-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
+.rustdesk-client-actions button { min-height: 38px; padding: 8px 18px; font-size: 14px; }
+.rustdesk-client-actions #set-rustdesk-tray { border: 1px solid #596785; background: #242d40; }
 .type-badge.serial { color: #d4b88f; }
 .type-badge.local { color: #a8b4c8; }
 #session-list .s-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
