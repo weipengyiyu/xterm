@@ -5,6 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { check } = require('./dependencies');
+const { copyBundledRustDesk } = require('./bundled-rustdesk');
 const root = path.resolve(__dirname, '..');
 
 async function main() {
@@ -20,6 +21,7 @@ async function main() {
   for (const dir of ['server', 'web', 'desktop', 'scripts']) {
     fs.cpSync(path.join(root, dir), path.join(pkgRoot, dir), { recursive: true });
   }
+  const rustDeskBundled = copyBundledRustDesk(pkgRoot);
   for (const file of ['package.json', 'package-lock.json', 'LICENSE', 'README.md', 'launch.ps1', 'launcher.vbs', 'run.bat', '启动.cmd', 'run.sh', 'stop.vbs', 'xterm-icon.ico']) {
     fs.copyFileSync(path.join(root, file), path.join(pkgRoot, file));
   }
@@ -62,12 +64,14 @@ async function main() {
   fs.writeFileSync(path.join(pkgRoot, 'portable.json'), JSON.stringify({
     platform: process.platform, arch: process.arch, nodeAbi: process.versions.modules,
     nodeVersion: process.version, version: manifest.version,
+    rustDeskBundled,
   }, null, 2));
   fs.writeFileSync(path.join(pkgRoot, 'START-HERE.txt'),
     `xterm portable (${process.platform}/${process.arch})\r\n\r\n` +
     `Extract the entire folder before running. Windows: double-click launcher.vbs.\r\n` +
     `No Node.js installation, administrator permission, or network download is required.\r\n` +
-    `Keep runtime, node_modules, desktop, server and web together.\r\n` +
+    `Keep runtime, node_modules, desktop, server, web and tools together.\r\n` +
+    (rustDeskBundled ? `RustDesk Windows x64 portable client and its source/license materials are included in tools/rustdesk.\r\n` : '') +
     `Windows x64 requires Windows 10 1809 or later / Windows 11.\r\n` +
     `Other OS/architectures need a separate package built on that target.\r\n`);
   const packedFailure = check(pkgRoot, true);

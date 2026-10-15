@@ -5,6 +5,8 @@ const { randomUUID } = require('crypto');
 const { createBackup, readBackup, parseOpenSSHConfig } = require('./session-backup');
 const { connectionConfigForRequest, connectionTargetsMatch } = require('./connection-config');
 const { sanitizeSession } = require('./session-schema');
+const { resolveRustDesk, launchRustDesk } = require('./rustdesk-launcher');
+const rustdeskService = require('./rustdesk-service').createRustDeskServiceController();
 const { isScanAllowed, expandTarget, parseIPv4, isPrivateIPv4 } = require('./net-scan');
 
 function createWsMessageHandler(ctx) {
@@ -32,6 +34,42 @@ function createWsMessageHandler(ctx) {
     const LOG_FILE = ctx.getLogFile();
 
   switch (m.type) {
+    case 'rustdesk-service': {
+      const requestId = typeof m.requestId === 'string' ? m.requestId.slice(0, 120) : '';
+      try {
+        if (m.action !== 'status' && m.action !== 'set') throw new Error('RustDesk 服务操作无效');
+        const service = m.action === 'set'
+          ? await rustdeskService.setEnabled(m.enabled, typeof m.clientPath === 'string' ? m.clientPath : '')
+          : await rustdeskService.status();
+        send(ws, { type: 'rustdesk-service', requestId, ok: true, service });
+        if (m.action === 'set') log('info', `RustDesk 后台服务已${m.enabled ? '开启' : '关闭'}`);
+      } catch (error) {
+        const service = await rustdeskService.status().catch(() => null);
+        send(ws, { type: 'rustdesk-service', requestId, ok: false, error: error.message, service });
+      }
+      break;
+    }
+    case 'rustdesk-info': {
+      try {
+        const clientPath = await resolveRustDesk(typeof m.clientPath === 'string' ? m.clientPath : '');
+        send(ws, { type: 'rustdesk-info', clientPath });
+      } catch (error) {
+        send(ws, { type: 'rustdesk-info', clientPath: '', error: error.message });
+      }
+      break;
+    }
+    case 'rustdesk-launch': {
+      try {
+        const config = sanitizeSession({ ...m.session, type: 'rustdesk' });
+        if (!config) throw new Error('RustDesk 会话数据无效，请检查设备 ID');
+        const result = await launchRustDesk(config);
+        send(ws, { type: 'rustdesk-launch', ok: true, ...result });
+        log('info', `已启动 RustDesk 连接「${config.name}」`);
+      } catch (error) {
+        send(ws, { type: 'rustdesk-launch', ok: false, error: error.message });
+      }
+      break;
+    }
     case 'test-connection-output': {
       if (!process.env.XTERM_TEST_SFTP_ROOT || !Number.isInteger(m.id)) return;
       const conn = getConnection(ws, m.id);
@@ -105,7 +143,7 @@ function createWsMessageHandler(ctx) {
       if (s.id && sessions[s.id]) {
         // 编辑保存: 前端表单密码框留空 = 不修改, 保留存储中的敏感字段
         for (const k of ['password', 'privateKey', 'passphrase', 'loginPass']) {
-          if (s[k] === undefined || s[k] === '') s[k] = sessions[s.id][k];
+          if (s.type !== 'rustdesk' && (s[k] === undefined || s[k] === '')) s[k] = sessions[s.id][k];
         }
         if (s.proxy && !s.proxy.password && sessions[s.id].proxy?.password) {
           s.proxy = { ...s.proxy, password: sessions[s.id].proxy.password };

@@ -9,6 +9,7 @@ const ALLOWED = [
   'tunnels', 'proxy', 'jumpAuth', 'agentForward',
   'group', 'autoCmds', 'rtscts', 'hexMode', 'timestamp', 'trigger', 'viewOnly', 'newline',
   'connect', 'readonly', 'replay', 'sessionLog', 'shell', 'cwd',
+  'deviceId', 'clientPath',
 ];
 
 function sanitizeSession(s) {
@@ -17,11 +18,19 @@ function sanitizeSession(s) {
   for (const key of Object.keys(out)) {
     if (!ALLOWED.includes(key)) delete out[key];
   }
-  if (!['ssh', 'telnet', 'vnc', 'serial', 'local'].includes(out.type)) return null;
+  if (!['ssh', 'telnet', 'vnc', 'serial', 'local', 'rustdesk'].includes(out.type)) return null;
   out.name = String(out.name || '').trim().slice(0, 120);
   if (!out.name) return null;
 
-  if (out.type === 'local') {
+  if (out.type === 'rustdesk') {
+    const { normalizeRustDeskId } = require('./rustdesk-launcher');
+    try { out.deviceId = normalizeRustDeskId(out.deviceId); } catch { return null; }
+    const clean = { id: out.id, name: out.name, type: out.type, deviceId: out.deviceId,
+      group: String(out.group || '').trim().slice(0, 64) || undefined,
+      sortOrder: out.sortOrder, clientPath: String(out.clientPath || '').trim(), rememberPassword: false };
+    if (clean.clientPath.length > 4096 || clean.clientPath.includes('\0')) return null;
+    return clean;
+  } else if (out.type === 'local') {
     delete out.port;
     delete out.host;
     delete out.password;

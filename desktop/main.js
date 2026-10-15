@@ -8,6 +8,7 @@ const path = require('path');
 const os = require('os');
 const protocol = require('./startup-protocol');
 const { installDownloadFiles } = require('./download-files');
+const { installRustDeskPicker } = require('./rustdesk-picker');
 
 const root = path.resolve(__dirname, '..');
 const serverScript = path.join(root, 'server', 'index.js');
@@ -183,6 +184,7 @@ function createWindow() {
     },
   });
   installDownloadFiles(win, { ipcMain, dialog }, () => engineOrigin);
+  installRustDeskPicker(win, { ipcMain, dialog }, () => engineOrigin);
   win.setMenuBarVisibility(false);
   win.on('page-title-updated', (event) => {
     event.preventDefault();

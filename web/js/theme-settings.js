@@ -263,13 +263,14 @@ function bindSettingsChrome() {
 }
 
 function showSettingsTab(name) {
-  const wanted = name === 'hotkeys' ? 'hotkeys' : 'appearance';
+  const wanted = ['hotkeys', 'rustdesk'].includes(name) ? name : 'appearance';
   document.querySelectorAll('#dlg-settings [data-settings-tab]').forEach((btn) => {
     btn.classList.toggle('active', btn.getAttribute('data-settings-tab') === wanted);
   });
   document.querySelectorAll('#dlg-settings [data-settings-page]').forEach((page) => {
     page.classList.toggle('hidden', page.getAttribute('data-settings-page') !== wanted);
   });
+  if (wanted === 'rustdesk' && typeof refreshRustDeskService === 'function') refreshRustDeskService();
 }
 
 function fillSettingsForm(settings) {

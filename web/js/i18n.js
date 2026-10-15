@@ -6,6 +6,14 @@ var Xterm = window.Xterm;
 // ---------- 国际化 (中/英) ----------
 var I18N = {
   zh: {
+    rd_service_reading: '正在读取服务状态…', rd_service_changing: '正在切换服务，请完成 Windows 管理员授权…',
+    rd_service_unsupported: '后台服务开关目前仅支持 Windows。', rd_service_missing: '未安装服务，开启后将安装并启动 RustDesk。',
+    rd_service_running: '后台服务运行中', rd_service_stopped: '后台服务已停止', rd_service_transition: '服务正在切换状态，请稍后刷新。',
+    rd_service_timeout: '读取或操作超时，请刷新状态后重试。',
+    dl_name_required: '请填写会话名称', dl_vnc_host_invalid: '请填写有效的 VNC 主机地址', dl_vnc_port_invalid: '请填写有效的 VNC 端口',
+    rd_detected: '已检测到客户端：', rd_missing: '未检测到客户端，请安装 RustDesk 或填写客户端路径。',
+    rd_launched: '已启动 RustDesk，连接结果请查看 RustDesk 窗口。设备：', rd_failed: 'RustDesk 启动失败：',
+    rd_starting: '正在启动 RustDesk…', rd_invalid_id: '请填写有效的 RustDesk 设备 ID 或 IP 地址',
     btn_new: '新建', btn_local: '本地', btn_log: '日志',
     btn_sftp: '文件', btn_killall: '全部关闭', btn_lang: 'EN', btn_split: '分屏',
     btn_broadcast: '同步输入', btn_pane_max: '铺满',
@@ -37,6 +45,14 @@ var I18N = {
     ws_ok: '服务器已连接', ws_off: '服务器已断开', ws_init: '未连接服务器',
   },
   en: {
+    rd_service_reading: 'Reading service status…', rd_service_changing: 'Changing service state. Complete the Windows administrator prompt…',
+    rd_service_unsupported: 'The service switch currently supports Windows only.', rd_service_missing: 'Service not installed. Enabling will install and start RustDesk.',
+    rd_service_running: 'Background service running', rd_service_stopped: 'Background service stopped', rd_service_transition: 'Service state is changing. Refresh shortly.',
+    rd_service_timeout: 'The request timed out. Refresh the status and try again.',
+    dl_name_required: 'Enter a session name', dl_vnc_host_invalid: 'Enter a valid VNC host address', dl_vnc_port_invalid: 'Enter a valid VNC port',
+    rd_detected: 'Client detected: ', rd_missing: 'No client found. Install RustDesk or enter its executable path.',
+    rd_launched: 'RustDesk launched. Check its window for the connection result. Device: ', rd_failed: 'RustDesk launch failed: ',
+    rd_starting: 'Starting RustDesk…', rd_invalid_id: 'Enter a valid RustDesk device ID or IP address',
     btn_new: 'New', btn_local: 'Local', btn_log: 'Log',
     btn_sftp: 'Files', btn_killall: 'Close All', btn_lang: '中文', btn_split: 'Split',
     btn_broadcast: 'Broadcast', btn_pane_max: 'Maximize',
@@ -73,6 +89,16 @@ var I18N = {
 // hidden. WeakMaps retain the original Chinese key so language switching is
 // reversible, while the observer also covers controls rendered later.
 const DOM_TEXT_EN = {
+  '管理运行 xterm 的这台电脑上的 RustDesk 后台服务。开关立即生效，无需点「应用」。': 'Manage the RustDesk background service on the computer running xterm. Changes take effect immediately.',
+  '后台服务': 'Background service', '启用后台服务': 'Enable background service', '刷新状态': 'Refresh status',
+  '开启后开机自动运行；关闭后停止服务并禁用开机启动。操作可能需要 Windows 管理员授权。': 'Enable to start automatically at boot. Disable to stop the service and prevent startup. Windows administrator approval may be required.',
+  '正在读取服务状态…': 'Reading service status…',
+  '未安装服务时，首次开启会将客户端安装到系统目录。留空使用附带或自动检测的客户端。': 'If the service is missing, enabling installs the client in the system directory. Leave blank to use the bundled or detected client.',
+  '无人值守密码和自建服务器请在 RustDesk 中配置。关闭 xterm 不会停止已开启的后台服务。': 'Configure unattended passwords and custom servers in RustDesk. Closing xterm leaves the enabled service running.',
+  '设备 ID / IP 地址': 'Device ID / IP address',
+  'RustDesk 客户端路径': 'RustDesk executable path',
+  '选择客户端': 'Choose client', '检测客户端': 'Detect client',
+  '连接后打开独立的 RustDesk 窗口；密码、远程控制和文件传输由 RustDesk 处理。': 'Opens a separate RustDesk window. RustDesk handles passwords, remote control and file transfers.',
   '快捷键': 'Hotkeys',
   '自定义常用快捷键 (保存在本机 localStorage)。点击输入框后按下新组合键。': 'Customize common shortcuts (saved in localStorage). Click a field and press a new combo.',
   '点击后按下新快捷键': 'Click then press a new shortcut',
@@ -227,6 +253,8 @@ const DOM_TEXT_EN = {
 };
 
 const DOM_ATTR_EN = {
+  '如: 123 456 789': 'e.g. 123 456 789',
+  '留空自动检测已安装的 RustDesk': 'Leave blank to detect the installed RustDesk client',
   '过滤会话…': 'Filter sessions…',
   '终端外观设置 (字体/主题/滚动)': 'Settings (appearance / hotkeys)',
   '关闭': 'Close',

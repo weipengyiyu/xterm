@@ -197,11 +197,13 @@ function nextSessionSortOrder() {
 function importSessionEntries(entries, source) {
   if (!Array.isArray(entries) || entries.length > 500) throw new Error('导入会话数量无效（最多 500 个）');
   const names = new Set(Object.values(sessions).map(s => s.name));
-  const acceptedTypes = new Set(['ssh', 'telnet', 'vnc', 'serial', 'local']);
+  const acceptedTypes = new Set(['ssh', 'telnet', 'vnc', 'serial', 'local', 'rustdesk']);
   let count = 0;
   for (const item of entries) {
     if (!item || typeof item !== 'object' || !acceptedTypes.has(item.type)) continue;
-    const session = JSON.parse(JSON.stringify(item)); // drops hostile prototypes
+    const session = item.type === 'rustdesk' ? require('./session-schema').sanitizeSession(item)
+      : JSON.parse(JSON.stringify(item)); // drops hostile prototypes
+    if (!session) continue;
     let name = String(session.name || '').trim().slice(0, 120);
     if (!name) continue;
     const original = name;

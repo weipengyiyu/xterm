@@ -26,3 +26,6 @@ function handle(entry) {
 contextBridge.exposeInMainWorld('xtermDesktopFiles', {
   pickDirectory: async () => handle(await call('pick')),
 });
+contextBridge.exposeInMainWorld('xtermRustDesk', {
+  pickClient: () => ipcRenderer.invoke('xterm-rustdesk-pick'),
+});

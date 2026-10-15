@@ -235,7 +235,7 @@ document.addEventListener('keydown', (e) => {
   }
 }, true);
 
-const TYPE_BADGE = { ssh: 'SSH', telnet: 'TEL', vnc: 'VNC', serial: 'COM', local: 'LOC' };
+const TYPE_BADGE = { ssh: 'SSH', telnet: 'TEL', vnc: 'VNC', serial: 'COM', local: 'LOC', rustdesk: 'RD' };
 const TYPE_ICON = TYPE_BADGE; // legacy alias used by tab labels / close dialogs
 let localShells = [];
 const STATE_TEXT = { connecting: '连接中…', connected: '● 已连接', closed: '✕ 已断开' };
@@ -352,6 +352,7 @@ function onWsOpen() {
 }
 
 function onWsClose(ev) {
+  if (typeof resetRustDeskServiceUi === 'function') resetRustDeskServiceUi();
   clearTimeout(wsConnectTimer);
   outputHoldSent = false;
   drawBusy = false;
@@ -816,6 +817,20 @@ function handleMsg(m) {
       renderLocalShells();
       break;
     }
+    case 'rustdesk-service': {
+      receiveRustDeskService(m);
+      break;
+    }
+    case 'rustdesk-info': {
+      $('r-client-status').textContent = m.error || (m.clientPath
+        ? `${t('rd_detected')}${m.clientPath}` : t('rd_missing'));
+      break;
+    }
+    case 'rustdesk-launch': {
+      const message = m.ok ? `${t('rd_launched')}${m.deviceId}` : `${t('rd_failed')}${m.error}`;
+      setStatus(message);
+      break;
+    }
     case 'sessions': {
       sessions = m.list || [];
       renderSessionList();
@@ -1169,6 +1184,14 @@ function restoreWorkspace() {
 
 // ---------- 标签管理 ----------
 function newTab(cfg, opts = {}) {
+  if (cfg.type === 'rustdesk') {
+    if (opts.connect !== false) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) { setStatus(t('ws_off')); return null; }
+      send({ type: 'rustdesk-launch', session: cfg });
+      setStatus(t('rd_starting'));
+    }
+    return null;
+  }
   const restoredId = Number(opts.id);
   const id = Number.isInteger(restoredId) && restoredId > 0 && restoredId <= 0xffff
     ? restoredId : tabSeq++;
@@ -1546,7 +1569,7 @@ function getSessionFilterText() {
 function sessionMatchesFilter(s, q) {
   if (!q) return true;
   const group = (s.group || '默认').toLowerCase();
-  const hay = [s.name, s.host, s.port, s.type, s.group, group, s.username, s.port && String(s.port)]
+  const hay = [s.name, s.host, s.deviceId, s.port, s.type, s.group, group, s.username, s.port && String(s.port)]
     .filter(Boolean).join(' ').toLowerCase();
   return hay.includes(q);
 }
@@ -1619,7 +1642,7 @@ function renderSessionList() {
       const row = document.createElement('div');
       row.className = 's-row';
       row.draggable = !batchMode;
-      const sub = s.type === 'serial' ? `${s.port} @ ${s.baudRate}` : `${s.host}:${s.port}`;
+      const sub = s.type === 'rustdesk' ? s.deviceId : s.type === 'serial' ? `${s.port} @ ${s.baudRate}` : `${s.host}:${s.port}`;
       const checked = batchSel.has(s.id) ? 'checked' : '';
       row.innerHTML = `
         ${batchMode ? `<input type="checkbox" class="b-cb" data-id="${esc(s.id)}" ${checked}>` : ''}
@@ -1705,6 +1728,7 @@ function connectTo(s) {
 
 // ---------- 新建/编辑对话框 ----------
 function openDlg(existing = null) {
+  $('dlg-error').classList.add('hidden');
   editingId = existing ? existing.id : null;
   $('dlg-title').textContent = t(existing ? 'dl_title_edit' : 'dl_title_new');
   $('f-name').value = existing?.name || '';
@@ -1743,6 +1767,10 @@ function openDlg(existing = null) {
   $('v-password').value = '';
   $('v-view-only').checked = !!existing?.viewOnly;
   $('v-reconnect').checked = existing?.reconnect !== false;
+  $('r-device-id').value = existing?.deviceId || '';
+  $('r-client-path').value = existing?.clientPath || '';
+  $('r-client-status').textContent = '';
+  $('r-client-pick').classList.toggle('hidden', !window.xtermRustDesk?.pickClient);
   $('f-autocmds').value = (existing?.autoCmds || []).join('\n');
   $('s-port').value = existing?.port2 || existing?.port || '';
   $('s-baud').value = String(existing?.baudRate || 115200);
@@ -1771,9 +1799,11 @@ function updateDlgFields() {
   $('grp-vnc').classList.toggle('hidden', type !== 'vnc');
   $('grp-serial').classList.toggle('hidden', type !== 'serial');
   $('grp-local').classList.toggle('hidden', type !== 'local');
-  $('f-remember-wrap').classList.toggle('hidden', type === 'serial');
+  $('grp-rustdesk').classList.toggle('hidden', type !== 'rustdesk');
+  if (type === 'rustdesk') send({ type: 'rustdesk-info', clientPath: $('r-client-path').value.trim() });
+  $('f-remember-wrap').classList.toggle('hidden', type === 'serial' || type === 'rustdesk');
   $('f-remember-label')?.classList.toggle('hidden', type === 'local');
-  $('grp-autocmds').classList.toggle('hidden', type === 'vnc' || type === 'serial');
+  $('grp-autocmds').classList.toggle('hidden', type === 'vnc' || type === 'serial' || type === 'rustdesk');
   const auth = $('f-auth').value;
   $('f-pwd-wrap').classList.toggle('hidden', auth !== 'password' && auth !== 'keyboard-interactive');
   $('f-key-wrap').classList.toggle('hidden', auth !== 'key');
@@ -1833,6 +1863,12 @@ function collectDlg() {
       loginUser: $('t-user').value.trim() || undefined,
       loginPass: $('t-pass').value || undefined,
     });
+  } else if (type === 'rustdesk') {
+    const deviceId = $('r-device-id').value.trim();
+    base.deviceId = /^\d[\d ]*$/.test(deviceId) ? deviceId.replace(/ /g, '') : deviceId;
+    base.clientPath = $('r-client-path').value.trim() || undefined;
+    base.rememberPassword = false;
+    base.sessionLog = false;
   } else if (type === 'local') {
     Object.assign(base, {
       shell: $('l-shell').value || 'powershell',
@@ -1865,7 +1901,7 @@ function collectDlg() {
     });
   }
   // 自动命令仅适用于终端协议，VNC 是图形桌面会话。
-  if (type !== 'vnc' && type !== 'serial') {
+  if (type !== 'vnc' && type !== 'serial' && type !== 'rustdesk') {
     const autoCmds = $('f-autocmds').value.split('\n').map(s => s.trim()).filter(Boolean);
     if (autoCmds.length) base.autoCmds = autoCmds;
   }
@@ -2593,6 +2629,71 @@ $('sftp-download-selected').onclick = () => { downloadSftpSelected(); };
 renderSftpDownloadDirLabel();
 updateSftpSelectUi();
 
+// ---------- RustDesk 本机后台服务 ----------
+let rustdeskServiceRequest = null;
+let rustdeskServiceState = null;
+let rustdeskServiceTimer = null;
+
+function paintRustDeskService(error = '') {
+  const toggle = $('set-rustdesk-service');
+  const service = rustdeskServiceState;
+  const pending = !!rustdeskServiceRequest;
+  toggle.checked = !!service?.running;
+  toggle.disabled = pending || !service?.supported || !!service?.busy;
+  $('set-rustdesk-refresh').disabled = pending;
+  $('set-rustdesk-path').disabled = pending;
+  $('set-rustdesk-pick').disabled = pending;
+  let key = !service ? 'rd_service_reading' : !service.supported ? 'rd_service_unsupported'
+    : service.busy ? 'rd_service_changing' : !service.installed ? 'rd_service_missing'
+    : service.running ? 'rd_service_running' : service.state === 'Stopped' ? 'rd_service_stopped' : 'rd_service_transition';
+  if (pending) key = rustdeskServiceRequest.action === 'set' ? 'rd_service_changing' : 'rd_service_reading';
+  $('set-rustdesk-status').textContent = error || t(key);
+}
+
+function resetRustDeskServiceUi() {
+  clearTimeout(rustdeskServiceTimer);
+  rustdeskServiceRequest = null;
+  rustdeskServiceState = null;
+  paintRustDeskService(t('ws_off'));
+}
+
+function requestRustDeskService(action, enabled) {
+  if (rustdeskServiceRequest) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) return resetRustDeskServiceUi();
+  const requestId = crypto.randomUUID();
+  rustdeskServiceRequest = { requestId, action };
+  paintRustDeskService();
+  send({ type: 'rustdesk-service', requestId, action, enabled, clientPath: $('set-rustdesk-path').value.trim() });
+  rustdeskServiceTimer = setTimeout(() => {
+    rustdeskServiceRequest = null;
+    rustdeskServiceState = null;
+    paintRustDeskService(t('rd_service_timeout'));
+  }, action === 'set' ? 135000 : 20000);
+}
+
+function refreshRustDeskService() { requestRustDeskService('status'); }
+
+function receiveRustDeskService(message) {
+  if (message.requestId !== rustdeskServiceRequest?.requestId) return;
+  clearTimeout(rustdeskServiceTimer);
+  rustdeskServiceRequest = null;
+  rustdeskServiceState = message.service || null;
+  paintRustDeskService(message.ok ? '' : message.error);
+}
+
+$('set-rustdesk-service').onchange = event => requestRustDeskService('set', event.target.checked);
+$('set-rustdesk-refresh').onclick = refreshRustDeskService;
+$('set-rustdesk-pick').classList.toggle('hidden', !window.xtermRustDesk?.pickClient);
+$('set-rustdesk-pick').onclick = async () => {
+  try {
+    const selected = await window.xtermRustDesk?.pickClient();
+    if (selected) $('set-rustdesk-path').value = selected;
+  } catch (error) { paintRustDeskService(error.message); }
+};
+document.addEventListener('xterm:connected', () => {
+  if (!$('dlg-settings-mask').classList.contains('hidden') && !$('settings-page-rustdesk').classList.contains('hidden')) refreshRustDeskService();
+});
+
 // ---------- 终端外观设置 ----------
 (function bindTerminalSettingsUi() {
   const btn = $('btn-settings');
@@ -2702,16 +2803,27 @@ $('batch-del').onclick = () => {
   }
 };
 
+function showConnectionError(message, fieldId) {
+  $('dlg-error').textContent = message;
+  $('dlg-error').classList.remove('hidden');
+  $(fieldId).focus();
+}
+
 function doConnect(save) {
   const cfg = collectDlg();
-  if (!cfg.name) { alert('请填写会话名称'); return; }
+  $('dlg-error').classList.add('hidden');
+  if (!cfg.name) { showConnectionError(t('dl_name_required'), 'f-name'); return; }
+  if (cfg.type === 'rustdesk' && !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(cfg.deviceId)) {
+    showConnectionError(t('rd_invalid_id'), 'r-device-id');
+    return;
+  }
   if (cfg.type === 'vnc') {
     if (!cfg.host || cfg.host.length > 253 || !/^[A-Za-z0-9._:-]+$/.test(cfg.host)) {
-      alert('请填写有效的 VNC 主机地址');
+      showConnectionError(t('dl_vnc_host_invalid'), 'v-host');
       return;
     }
     if (!Number.isInteger(cfg.port) || cfg.port < 1 || cfg.port > 65535) {
-      alert('请填写有效的 VNC 端口');
+      showConnectionError(t('dl_vnc_port_invalid'), 'v-port');
       return;
     }
   }
@@ -2726,6 +2838,18 @@ function doConnect(save) {
 }
 $('btn-dlg-conn').onclick = () => doConnect(false);
 $('btn-dlg-save').onclick = () => doConnect(true);
+$('dlg').querySelector('.form').addEventListener('input', () => $('dlg-error').classList.add('hidden'));
+$('r-client-detect').onclick = () => send({ type: 'rustdesk-info', clientPath: $('r-client-path').value.trim() });
+$('r-client-pick').onclick = async () => {
+  if (!window.xtermRustDesk?.pickClient) return;
+  try {
+    const clientPath = await window.xtermRustDesk.pickClient();
+    if (clientPath) {
+      $('r-client-path').value = clientPath;
+      $('r-client-detect').click();
+    }
+  } catch (error) { setStatus(error.message); }
+};
 
 
 function setStatus(msg) {

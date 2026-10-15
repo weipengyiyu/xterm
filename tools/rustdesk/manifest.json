@@ -1,0 +1,37 @@
+{
+  "name": "RustDesk",
+  "version": "1.5.0",
+  "platform": "win32",
+  "arch": "x64",
+  "license": "AGPL-3.0",
+  "releaseUrl": "https://github.com/rustdesk/rustdesk/releases/tag/1.5.0",
+  "assetUrl": "https://github.com/rustdesk/rustdesk/releases/download/1.5.0/rustdesk-1.5.0-x86_64.exe",
+  "sourceCommit": "fada664df7a294d1d1a9ca3e7cd3637069122f17",
+  "hbbCommonCommit": "229b904508364c8997aad0fb5af57effac859f60",
+  "sourceArchives": {
+    "rustdesk": "source/rustdesk-1.5.0.tar.gz",
+    "hbbCommon": "source/hbb_common-229b904.tar.gz"
+  },
+  "files": {
+    "rustdesk.exe": {
+      "size": 25887600,
+      "sha256": "8555777215510d83d2d61c9dc984e4fcc838bd7e79f9d18a42585431f5e8bb47"
+    },
+    "LICENSE": {
+      "size": 34523,
+      "sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef"
+    },
+    "NOTICE.md": {
+      "size": 2616,
+      "sha256": "d7883e80074578d5bcb6cac726f51ae4b251aadab0bfd5e3cb045c5403a7c95c"
+    },
+    "source/rustdesk-1.5.0.tar.gz": {
+      "size": 7253214,
+      "sha256": "251c82c41378d55823cfc37203b75280f6c442deadb6428cb02e3a28486efcb4"
+    },
+    "source/hbb_common-229b904.tar.gz": {
+      "size": 117370,
+      "sha256": "4902cb2429d3ab7f055a7833c966d63b8531d3912a0423bd27cfe81fee000356"
+    }
+  }
+}

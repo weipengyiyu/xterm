@@ -10,6 +10,7 @@ const { execSync } = require('child_process');
 const { existsSync, mkdirSync, copyFileSync, cpSync, rmSync } = require('fs');
 const os = require('os');
 const path = require('path');
+const { copyBundledRustDesk } = require('./bundled-rustdesk');
 
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'dist');
@@ -43,6 +44,7 @@ function prepareStaging() {
   for (const file of COPY_FILES) {
     copyFileSync(path.join(ROOT, file), path.join(STAGING, file));
   }
+  copyBundledRustDesk(STAGING);
   // Remove build-only packages from the copied dependency tree without
   // contacting the registry. caxa's own `npm dedupe --production` may access
   // the network and can hang silently in offline/restricted environments.

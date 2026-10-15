@@ -158,6 +158,7 @@
 <div id="dlg-mask" class="hidden">
   <div id="dlg">
     <h3 id="dlg-title">新建连接</h3>
+    <p id="dlg-error" class="hidden" role="alert"></p>
     <div class="form">
       <label>会话名称 <input id="f-name" placeholder="如: 开发板串口"></label>
       <label>分组 <input id="f-group" placeholder="如: 开发板 / 服务器"></label>
@@ -166,6 +167,7 @@
           <option value="ssh">SSH</option>
           <option value="telnet">Telnet</option>
           <option value="vnc">VNC</option>
+          <option value="rustdesk">RustDesk</option>
           <option value="local">Local</option>
           <option value="serial">Serial</option>
         </select>
@@ -241,6 +243,16 @@
       <div class="grp" id="f-remember-wrap">
         <label id="f-remember-label"><input type="checkbox" id="f-remember"> 记住凭据（使用 Windows DPAPI 加密）</label>
         <label><input type="checkbox" id="f-session-log"> 记录会话日志（明文保存到本地文件，含终端输出）</label>
+      </div>
+      <div class="grp hidden" id="grp-rustdesk">
+        <label>设备 ID / IP 地址 <input id="r-device-id" placeholder="如: 123 456 789" maxlength="128" autocomplete="off"></label>
+        <label>RustDesk 客户端路径 <input id="r-client-path" placeholder="留空自动检测已安装的 RustDesk" maxlength="4096"></label>
+        <div>
+          <button type="button" id="r-client-pick" class="mini hidden">选择客户端</button>
+          <button type="button" id="r-client-detect" class="mini">检测客户端</button>
+        </div>
+        <p id="r-client-status" class="muted"></p>
+        <p class="muted">连接后打开独立的 RustDesk 窗口；密码、远程控制和文件传输由 RustDesk 处理。</p>
       </div>
       <div class="grp" id="grp-autocmds">
         <label>连接后自动执行(每行一条)
@@ -522,6 +534,7 @@
       <nav class="settings-nav" role="tablist" aria-label="设置分类">
         <button type="button" class="settings-nav-btn active" data-settings-tab="appearance">外观</button>
         <button type="button" class="settings-nav-btn" data-settings-tab="hotkeys">快捷键</button>
+        <button type="button" class="settings-nav-btn" data-settings-tab="rustdesk">RustDesk</button>
       </nav>
       <div class="settings-pages">
         <section id="settings-page-appearance" class="settings-page" data-settings-page="appearance">
@@ -578,6 +591,31 @@
               </label>
             </div>
           </div>
+        </section>
+        <section id="settings-page-rustdesk" class="settings-page hidden" data-settings-page="rustdesk">
+          <p class="settings-lead">管理运行 xterm 的这台电脑上的 RustDesk 后台服务。开关立即生效，无需点「应用」。</p>
+          <div class="settings-row">
+            <div class="settings-copy">
+              <label for="set-rustdesk-service">后台服务</label>
+              <p class="settings-hint">开启后开机自动运行；关闭后停止服务并禁用开机启动。操作可能需要 Windows 管理员授权。</p>
+            </div>
+            <div class="settings-control">
+              <label class="settings-switch"><input id="set-rustdesk-service" type="checkbox" role="switch" disabled><span>启用后台服务</span></label>
+              <button type="button" id="set-rustdesk-refresh" class="mini">刷新状态</button>
+            </div>
+          </div>
+          <p id="set-rustdesk-status" class="settings-hint" role="status" aria-live="polite">正在读取服务状态…</p>
+          <div class="settings-row">
+            <div class="settings-copy">
+              <label for="set-rustdesk-path">RustDesk 客户端路径</label>
+              <p class="settings-hint">未安装服务时，首次开启会将客户端安装到系统目录。留空使用附带或自动检测的客户端。</p>
+            </div>
+            <div class="settings-control">
+              <input id="set-rustdesk-path" type="text" maxlength="4096" placeholder="留空自动检测已安装的 RustDesk">
+              <button type="button" id="set-rustdesk-pick" class="mini hidden">选择客户端</button>
+            </div>
+          </div>
+          <p class="settings-hint">无人值守密码和自建服务器请在 RustDesk 中配置。关闭 xterm 不会停止已开启的后台服务。</p>
         </section>
         <section id="settings-page-hotkeys" class="settings-page hidden" data-settings-page="hotkeys">
           <p class="settings-lead">点右侧组合键框，再按下新的按键。改完马上生效，不用点「应用」。按 Delete 或「还原」恢复该项默认。</p>
