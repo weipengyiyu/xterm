@@ -27,6 +27,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
   // 1. 分屏
   console.log('[1] 点"⊞ 分屏"...');
+  await page.click('#btn-more');
   await page.click('#btn-split');
   await sleep(2500);
   const paneCount = await page.$$eval('.term-host.pane-split', els => els.length);
@@ -62,6 +63,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
   // 3. 再点分屏按钮 = 关闭分屏 (切换式)
   console.log('[3] 再点"⊞ 分屏"按钮关闭...');
+  await page.click('#btn-more');
   await page.click('#btn-split');
   await sleep(500);
   const paneAfter = await page.$$eval('.term-host.pane-split', els => els.length);

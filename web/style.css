@@ -322,6 +322,7 @@ button.mini { padding: 2px 8px; font-size: 11px; }
   animation: menuIn .14s ease forwards;
 }
 #menu-local { left: 0; right: auto; min-width: 180px; }
+#menu-more { max-height: calc(100vh - 64px); overflow-y: auto; }
 #menu-more.hidden, #menu-local.hidden { display: none; }
 @keyframes menuIn {
   to { opacity: 1; transform: translateY(0); }

@@ -35,6 +35,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
   // 2. 打开命令面板, 保存命令并勾选自动执行 (IP: 192.168.1.216)
   console.log('[2] 打开⚡命令面板保存命令(IP: 192.168.1.216)...');
+  await page.click('#btn-more');
   await page.click('#btn-cmds');
   await sleep(300);
   const cur1 = await page.$eval('#cmd-cur', el => el.textContent);
@@ -58,6 +59,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   await page.type('#f-password', '1');
   await page.click('#btn-dlg-conn');
   await sleep(2500);
+  await page.click('#btn-more');
   await page.click('#btn-cmds');
   await sleep(300);
   const sharedCount = await page.$$eval('#cmd-list .cmd-item', els => els.length);
@@ -74,6 +76,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   await page.type('#t-host', '192.168.1.123');
   await page.click('#btn-dlg-conn');
   await sleep(1500);
+  await page.click('#btn-more');
   await page.click('#btn-cmds');
   await sleep(300);
   const otherCount = await page.$$eval('#cmd-list .cmd-item', els => els.length);

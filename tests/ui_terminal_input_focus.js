@@ -72,11 +72,11 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
     // Unknown focus loss: no click/close/window event is available to repair it.
     // The first Space must reach the terminal once, without activating a button.
-    await page.evaluate(() => $('btn-broadcast').focus());
+    await page.evaluate(() => $('btn-more').focus());
     await page.keyboard.press('Space');
     await assertInput(' ', id);
     assert.strictEqual(await page.evaluate(() => broadcastInput), false, 'lost Space must not toggle broadcast');
-    await page.evaluate(() => $('btn-broadcast').focus());
+    await page.evaluate(() => $('btn-more').focus());
     await page.waitForFunction(() => document.activeElement === inputTab.term.textarea, { timeout: 1500 });
     await assertInput('', id);
     // Native blur may leave activeElement unchanged but the widget inactive.
@@ -85,7 +85,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.waitForFunction(() => inputTab.term.element.classList.contains('focus'), { timeout: 1500 });
     await page.keyboard.press('Space');
     await assertInput(' ', id);
-    await page.evaluate(() => $('btn-broadcast').focus());
+    await page.evaluate(() => $('btn-more').focus());
     await page.keyboard.down('Space');
     await page.keyboard.down('Space');
     await page.keyboard.down('Space');
@@ -95,34 +95,34 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
       ['a', 'a'], ['A', 'A'], ['!', '!'], ['Space', ' '], ['Backspace', '\x7f'],
       ['Enter', '\r'], ['ArrowUp', '\x1b[A'],
     ]) {
-      await page.evaluate(() => $('btn-broadcast').focus());
+      await page.evaluate(() => $('btn-more').focus());
       await page.keyboard.press(key);
       await assertInput(expected, id);
     }
-    await page.evaluate(() => $('btn-broadcast').focus());
+    await page.evaluate(() => $('btn-more').focus());
     await page.keyboard.down('Control');
     await page.keyboard.press('c');
     await page.keyboard.up('Control');
     await assertInput('\x03', id);
     // Replay must honor the application's cursor-key mode, not guess ANSI bytes.
     await page.evaluate(() => new Promise(resolve => inputTab.term.write('\x1b[?1h', resolve)));
-    await page.evaluate(() => $('btn-broadcast').focus());
+    await page.evaluate(() => $('btn-more').focus());
     await page.keyboard.press('ArrowUp');
     await assertInput('\x1bOA', id);
     await page.evaluate(() => new Promise(resolve => inputTab.term.write('\x1b[?1l', resolve)));
 
     // Native input continues on the recovered textarea; do not read the OS clipboard.
     await page.evaluate(() => {
-      $('btn-broadcast').focus();
-      $('btn-broadcast').dispatchEvent(new KeyboardEvent('keydown', { key: 'v', code: 'KeyV', keyCode: 86, ctrlKey: true, bubbles: true, cancelable: true }));
+      $('btn-more').focus();
+      $('btn-more').dispatchEvent(new KeyboardEvent('keydown', { key: 'v', code: 'KeyV', keyCode: 86, ctrlKey: true, bubbles: true, cancelable: true }));
       const clipboard = new DataTransfer();
       clipboard.setData('text/plain', 'paste a b');
       document.activeElement.dispatchEvent(new ClipboardEvent('paste', { clipboardData: clipboard, bubbles: true, cancelable: true }));
     });
     await assertInput('paste a b', id);
     await page.evaluate(() => {
-      $('btn-broadcast').focus();
-      $('btn-broadcast').dispatchEvent(new KeyboardEvent('keydown', { key: 'Process', keyCode: 229, bubbles: true, cancelable: true }));
+      $('btn-more').focus();
+      $('btn-more').dispatchEvent(new KeyboardEvent('keydown', { key: 'Process', keyCode: 229, bubbles: true, cancelable: true }));
     });
     assert(await page.evaluate(() => document.activeElement === inputTab.term.textarea), 'IME start must recover terminal focus');
     const ime = await page.createCDPSession();
@@ -135,10 +135,13 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
     // Toolbar actions and dialogs used to leave focus on a button, rendering
     // an outline cursor and dropping subsequent terminal input.
+    await page.click('#btn-more');
     await page.click('#btn-broadcast');
+    await page.click('#btn-more');
     await page.click('#btn-broadcast');
     await page.keyboard.type(' toolbar ');
     await assertInput(' toolbar ', id);
+    await page.click('#btn-more');
     await page.click('#btn-cmds');
     await page.click('#cmds-close');
     await page.keyboard.type(' commands ');
@@ -184,6 +187,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
       await page.keyboard.press('Space');
       await assertInput(' ', id);
     }
+    await page.click('#btn-more');
     await page.click('#btn-workspace');
     await page.click('#workspace-close');
     await page.keyboard.press('Space');
@@ -255,12 +259,12 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.mouse.click(splitBox.x + 30, splitBox.y + splitBox.height - 50);
     await page.keyboard.type(' split  spaces ');
     await assertInput(' split  spaces ', paneId);
-    await page.evaluate(() => $('btn-broadcast').focus());
+    await page.evaluate(() => $('btn-more').focus());
     await page.keyboard.press('Space');
     await assertInput(' ', paneId);
     // Hovering over a pane repairs lost focus without requiring a click.
     await page.evaluate(() => {
-      $('btn-broadcast').focus();
+      $('btn-more').focus();
       inputTab._focusTarget = inputTab;
     });
     await page.mouse.move(splitBox.x + 30, splitBox.y + splitBox.height - 55);
@@ -271,6 +275,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.keyboard.press('Escape');
     await page.keyboard.press('Space');
     await assertInput(' ', paneId);
+    await page.click('#btn-more');
     await page.click('#btn-cmds');
     await page.type('#cmd-content', 'echo a b');
     await assertInput('', paneId);
@@ -288,7 +293,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     await assertInput(' ', paneId);
 
     // A real browser page switch exercises blur/focus without a terminal click.
-    await page.evaluate(() => $('btn-broadcast').focus());
+    await page.evaluate(() => $('btn-more').focus());
     const otherPage = await browser.newPage();
     await otherPage.bringToFront();
     await page.bringToFront();

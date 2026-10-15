@@ -66,6 +66,7 @@ function waitForServer(deadline = Date.now() + 10000) {
         username: 'nobody', reconnect: false,
       }, { connect: false });
     });
+    await page.click('#btn-more');
     await page.click('#btn-split');
     await sleep(250);
 
@@ -99,6 +100,7 @@ function waitForServer(deadline = Date.now() + 10000) {
     assert(ratio > 0.3 && ratio < 0.4, `unexpected split ratio ${ratio}`);
 
     // 2×2 grid: adding a third pane must reveal draggable grid dividers.
+    await page.click('#btn-more');
     await page.click('#btn-split');
     await sleep(350);
     const grid = await page.evaluate(() => {
@@ -180,6 +182,7 @@ function waitForServer(deadline = Date.now() + 10000) {
     assert.deepStrictEqual(backToTwo, { panes: 1, display: '', flexDirection: 'row', visibleDividers: 1 });
     assert.deepStrictEqual(pageErrors, [], `grid teardown raised page errors: ${pageErrors.join('; ')}`);
 
+    await page.click('#btn-more');
     await page.click('#btn-workspace');
     assert.strictEqual(await page.$eval('#dlg-workspace-mask', el => !el.classList.contains('hidden')), true);
     await page.click('#workspace-save');
@@ -194,8 +197,9 @@ function waitForServer(deadline = Date.now() + 10000) {
 
     // Change the live layout, then prove workspace restore recreates it.
     await page.click('#workspace-close');
-    await page.click('#btn-split');
+    await page.click('.term-host.pane-split .pane-close');
     assert.strictEqual(await page.$$eval('.term-host.pane-split', elements => elements.length), 0);
+    await page.click('#btn-more');
     await page.click('#btn-workspace');
     await page.click('#workspace-restore');
     await sleep(350);
