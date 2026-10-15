@@ -89,6 +89,7 @@ var I18N = {
 // hidden. WeakMaps retain the original Chinese key so language switching is
 // reversible, while the observer also covers controls rendered later.
 const DOM_TEXT_EN = {
+  '显示托盘图标': 'Show tray icon',
   '管理运行 xterm 的这台电脑上的 RustDesk 后台服务。开关立即生效，无需点「应用」。': 'Manage the RustDesk background service on the computer running xterm. Changes take effect immediately.',
   '后台服务': 'Background service', '启用后台服务': 'Enable background service', '刷新状态': 'Refresh status',
   '开启后开机自动运行；关闭后停止服务并禁用开机启动。操作可能需要 Windows 管理员授权。': 'Enable to start automatically at boot. Disable to stop the service and prevent startup. Windows administrator approval may be required.',

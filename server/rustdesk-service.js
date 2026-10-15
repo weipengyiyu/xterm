@@ -2,13 +2,22 @@
 
 const path = require('path');
 const { execFile } = require('child_process');
-const { resolveRustDesk } = require('./rustdesk-launcher');
+const { resolveRustDesk, launchRustDeskTray } = require('./rustdesk-launcher');
 
 const SERVICE_QUERY = `
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $s = Get-Service | Where-Object { $_.ServiceName -eq 'RustDesk' }
 if ($null -eq $s) { @{ installed = $false; running = $false; state = 'NotInstalled'; startup = '' } | ConvertTo-Json -Compress }
-else { @{ installed = $true; running = ($s.Status -eq 'Running'); state = [string]$s.Status; startup = [string]$s.StartType } | ConvertTo-Json -Compress }
+else {
+  $clientPath = ''
+  $imagePath = Get-ItemPropertyValue -LiteralPath 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\RustDesk' -Name ImagePath
+  $imagePath = [Environment]::ExpandEnvironmentVariables($imagePath)
+  if ($imagePath -match '^(?:"([^"]+)"|(.+?\\.exe)(?:\\s|$))') {
+    if ($Matches[1]) { $clientPath = $Matches[1] } else { $clientPath = $Matches[2] }
+  }
+  @{ installed = $true; running = ($s.Status -eq 'Running'); state = [string]$s.Status; startup = [string]$s.StartType; clientPath = $clientPath } | ConvertTo-Json -Compress
+}
 `;
 
 function runPowerShell(script, options = {}) {
@@ -61,6 +70,7 @@ try {
 function createRustDeskServiceController(options = {}) {
   const platform = options.platform || process.platform;
   const run = options.runPowerShell || runPowerShell;
+  const launchTray = options.launchRustDeskTray || launchRustDeskTray;
   let busy = false;
   async function status() {
     if (platform !== 'win32') return { supported: false, installed: false, running: false, busy: false };
@@ -90,10 +100,25 @@ function createRustDeskServiceController(options = {}) {
         : after.installed && (after.state !== 'Stopped' || after.startup !== 'Disabled')) {
         throw new Error('RustDesk 服务未达到预期状态，请检查管理员授权后重试');
       }
-      return { ...after, busy: false };
+      // A Windows service runs outside the interactive desktop. Launch its
+      // tray in xterm's user session, using the registered service executable.
+      let trayError = '';
+      if (enabled) {
+        try { await launchTray(after.clientPath || clientPath || executable); }
+        catch (error) { trayError = error.message; }
+      }
+      return { ...after, busy: false, ...(trayError ? { trayError } : {}) };
     } finally { busy = false; }
   }
-  return { status, setEnabled };
+  async function showTray() {
+    if (busy) throw new Error('RustDesk 服务正在操作中，请稍后重试');
+    const service = await status();
+    if (!service.supported) throw new Error('RustDesk 托盘程序目前仅支持 Windows');
+    if (!service.running) throw new Error('请先开启 RustDesk 后台服务');
+    await launchTray(service.clientPath || '');
+    return service;
+  }
+  return { status, setEnabled, showTray };
 }
 
 module.exports = { createRustDeskServiceController, serviceChangeScript, SERVICE_QUERY };

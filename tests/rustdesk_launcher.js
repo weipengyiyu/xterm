@@ -5,7 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { EventEmitter } = require('events');
-const { resolveRustDesk, launchRustDesk } = require('../server/rustdesk-launcher');
+const { resolveRustDesk, launchRustDesk, launchRustDeskTray } = require('../server/rustdesk-launcher');
 const { sanitizeSession } = require('../server/session-schema');
 const { installRustDeskPicker } = require('../desktop/rustdesk-picker');
 
@@ -38,6 +38,22 @@ const { installRustDeskPicker } = require('../desktop/rustdesk-picker');
     assert.strictEqual(invocation.spawnOptions.shell, false);
     assert.strictEqual(invocation.spawnOptions.detached, true);
     assert.strictEqual(invocation.spawnOptions.cwd, dir);
+    await launchRustDeskTray(clientPath, { ...options, spawn: (file, args, spawnOptions) => {
+      assert.strictEqual(file, clientPath);
+      assert.deepStrictEqual(args, ['--tray']);
+      assert.strictEqual(spawnOptions.shell, false);
+      assert.strictEqual(spawnOptions.windowsHide, true);
+      assert.strictEqual(spawnOptions.detached, true);
+      const child = new EventEmitter();
+      child.unref = () => {};
+      process.nextTick(() => child.emit('spawn'));
+      return child;
+    } });
+    await assert.rejects(launchRustDeskTray(clientPath, { ...options, spawn: () => {
+      const child = new EventEmitter();
+      process.nextTick(() => child.emit('error', new Error('ENOEXEC')));
+      return child;
+    } }), /托盘程序/);
     await assert.rejects(launchRustDesk({ ...config, deviceId: '--password' }), /有效/);
     await assert.rejects(launchRustDesk({ ...config, deviceId: '123 & calc.exe' }), /有效/);
     await assert.rejects(launchRustDesk(config, { spawn: () => {

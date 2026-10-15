@@ -29,7 +29,9 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     const createController = serviceModule.createRustDeskServiceController;
     serviceModule.createRustDeskServiceController = () => {
       let state = { installed: false, running: false, state: 'NotInstalled', startup: '' };
-      return createController({ platform: 'win32', runPowerShell: async script => {
+      return createController({ platform: 'win32', launchRustDeskTray: async file => {
+        require('fs').writeFileSync(process.env.XTERM_RD_RECORD + '.tray', file || 'default');
+      }, runPowerShell: async script => {
         if (script === serviceModule.SERVICE_QUERY) return JSON.stringify(state);
         await new Promise(resolve => setTimeout(resolve, 250));
         if (require('fs').existsSync(process.env.XTERM_RD_RECORD + '.service-error')) throw new Error('管理员授权已取消');
@@ -109,16 +111,23 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.click('[data-settings-tab="rustdesk"]');
     await page.waitForFunction(() => !document.getElementById('set-rustdesk-service').disabled);
     assert.strictEqual(await page.$eval('#set-rustdesk-service', el => el.checked), false);
+    assert(await page.$eval('#set-rustdesk-tray', el => el.disabled));
     await page.click('#set-rustdesk-service');
     assert(await page.$eval('#set-rustdesk-service', el => el.disabled), 'disable switch during service mutation');
     await page.waitForFunction(() => document.getElementById('set-rustdesk-service').checked && !document.getElementById('set-rustdesk-service').disabled);
     assert((await page.$eval('#set-rustdesk-status', el => el.textContent)).includes('运行中'));
+    assert(fs.existsSync(record + '.tray'), 'enable automatically launches the tray');
+    fs.unlinkSync(record + '.tray');
+    await page.click('#set-rustdesk-tray');
+    await page.waitForFunction(() => !document.getElementById('set-rustdesk-tray').disabled);
+    assert(fs.existsSync(record + '.tray'), 'restore button launches tray without changing service state');
     await page.click('#set-rustdesk-refresh');
     await page.waitForFunction(() => !document.getElementById('set-rustdesk-service').disabled);
     assert(await page.$eval('#set-rustdesk-service', el => el.checked));
     await page.click('#set-rustdesk-service');
     await page.waitForFunction(() => !document.getElementById('set-rustdesk-service').checked && !document.getElementById('set-rustdesk-service').disabled);
     assert((await page.$eval('#set-rustdesk-status', el => el.textContent)).includes('已停止'));
+    assert(await page.$eval('#set-rustdesk-tray', el => el.disabled));
     fs.writeFileSync(record + '.service-error', 'cancel');
     await page.click('#set-rustdesk-service');
     await page.waitForFunction(() => document.getElementById('set-rustdesk-status').textContent.includes('授权已取消'));

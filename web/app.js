@@ -439,6 +439,7 @@ var I18N = {
 // hidden. WeakMaps retain the original Chinese key so language switching is
 // reversible, while the observer also covers controls rendered later.
 const DOM_TEXT_EN = {
+  '显示托盘图标': 'Show tray icon',
   '管理运行 xterm 的这台电脑上的 RustDesk 后台服务。开关立即生效，无需点「应用」。': 'Manage the RustDesk background service on the computer running xterm. Changes take effect immediately.',
   '后台服务': 'Background service', '启用后台服务': 'Enable background service', '刷新状态': 'Refresh status',
   '开启后开机自动运行；关闭后停止服务并禁用开机启动。操作可能需要 Windows 管理员授权。': 'Enable to start automatically at boot. Disable to stop the service and prevent startup. Windows administrator approval may be required.',
@@ -6615,13 +6616,14 @@ function paintRustDeskService(error = '') {
   toggle.checked = !!service?.running;
   toggle.disabled = pending || !service?.supported || !!service?.busy;
   $('set-rustdesk-refresh').disabled = pending;
+  $('set-rustdesk-tray').disabled = pending || !service?.supported || !service?.running || !!service?.busy;
   $('set-rustdesk-path').disabled = pending;
   $('set-rustdesk-pick').disabled = pending;
   let key = !service ? 'rd_service_reading' : !service.supported ? 'rd_service_unsupported'
     : service.busy ? 'rd_service_changing' : !service.installed ? 'rd_service_missing'
     : service.running ? 'rd_service_running' : service.state === 'Stopped' ? 'rd_service_stopped' : 'rd_service_transition';
   if (pending) key = rustdeskServiceRequest.action === 'set' ? 'rd_service_changing' : 'rd_service_reading';
-  $('set-rustdesk-status').textContent = error || t(key);
+  $('set-rustdesk-status').textContent = error || (service?.trayError ? `${t(key)}；${service.trayError}` : t(key));
 }
 
 function resetRustDeskServiceUi() {
@@ -6657,6 +6659,7 @@ function receiveRustDeskService(message) {
 
 $('set-rustdesk-service').onchange = event => requestRustDeskService('set', event.target.checked);
 $('set-rustdesk-refresh').onclick = refreshRustDeskService;
+$('set-rustdesk-tray').onclick = () => requestRustDeskService('tray');
 $('set-rustdesk-pick').classList.toggle('hidden', !window.xtermRustDesk?.pickClient);
 $('set-rustdesk-pick').onclick = async () => {
   try {

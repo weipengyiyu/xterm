@@ -54,16 +54,27 @@ async function launchRustDesk(config, options = {}) {
   const deviceId = normalizeRustDeskId(config?.deviceId);
   const clientPath = await resolveRustDesk(config?.clientPath, options);
   if (!clientPath) throw new Error('未找到 RustDesk 客户端，请安装 RustDesk 或在会话中填写客户端路径');
-  const start = options.spawn || spawn;
-  await new Promise((resolve, reject) => {
-    const child = start(clientPath, ['--connect', deviceId], {
-      cwd: path.dirname(clientPath), shell: false, detached: true,
-      windowsHide: false, stdio: 'ignore',
-    });
-    child.once('error', () => reject(new Error('无法启动 RustDesk 客户端，请检查文件和运行权限')));
-    child.once('spawn', () => { child.unref(); resolve(); });
-  });
+  await startRustDesk(clientPath, ['--connect', deviceId], options, '无法启动 RustDesk 客户端，请检查文件和运行权限');
   return { deviceId, clientPath };
 }
 
-module.exports = { normalizeRustDeskId, resolveRustDesk, launchRustDesk };
+async function launchRustDeskTray(clientPath = '', options = {}) {
+  const executable = await resolveRustDesk(clientPath, options);
+  if (!executable) throw new Error('未找到 RustDesk 客户端，无法显示托盘图标');
+  await startRustDesk(executable, ['--tray'], { ...options, windowsHide: true }, '无法启动 RustDesk 托盘程序，请检查客户端路径和运行权限');
+  return { clientPath: executable };
+}
+
+async function startRustDesk(clientPath, args, options, errorMessage) {
+  const start = options.spawn || spawn;
+  await new Promise((resolve, reject) => {
+    const child = start(clientPath, args, {
+      cwd: path.dirname(clientPath), shell: false, detached: true,
+      windowsHide: options.windowsHide === true, stdio: 'ignore',
+    });
+    child.once('error', () => reject(new Error(errorMessage)));
+    child.once('spawn', () => { child.unref(); resolve(); });
+  });
+}
+
+module.exports = { normalizeRustDeskId, resolveRustDesk, launchRustDesk, launchRustDeskTray };

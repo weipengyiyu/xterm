@@ -2641,13 +2641,14 @@ function paintRustDeskService(error = '') {
   toggle.checked = !!service?.running;
   toggle.disabled = pending || !service?.supported || !!service?.busy;
   $('set-rustdesk-refresh').disabled = pending;
+  $('set-rustdesk-tray').disabled = pending || !service?.supported || !service?.running || !!service?.busy;
   $('set-rustdesk-path').disabled = pending;
   $('set-rustdesk-pick').disabled = pending;
   let key = !service ? 'rd_service_reading' : !service.supported ? 'rd_service_unsupported'
     : service.busy ? 'rd_service_changing' : !service.installed ? 'rd_service_missing'
     : service.running ? 'rd_service_running' : service.state === 'Stopped' ? 'rd_service_stopped' : 'rd_service_transition';
   if (pending) key = rustdeskServiceRequest.action === 'set' ? 'rd_service_changing' : 'rd_service_reading';
-  $('set-rustdesk-status').textContent = error || t(key);
+  $('set-rustdesk-status').textContent = error || (service?.trayError ? `${t(key)}；${service.trayError}` : t(key));
 }
 
 function resetRustDeskServiceUi() {
@@ -2683,6 +2684,7 @@ function receiveRustDeskService(message) {
 
 $('set-rustdesk-service').onchange = event => requestRustDeskService('set', event.target.checked);
 $('set-rustdesk-refresh').onclick = refreshRustDeskService;
+$('set-rustdesk-tray').onclick = () => requestRustDeskService('tray');
 $('set-rustdesk-pick').classList.toggle('hidden', !window.xtermRustDesk?.pickClient);
 $('set-rustdesk-pick').onclick = async () => {
   try {

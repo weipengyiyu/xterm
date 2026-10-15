@@ -37,10 +37,10 @@ function createWsMessageHandler(ctx) {
     case 'rustdesk-service': {
       const requestId = typeof m.requestId === 'string' ? m.requestId.slice(0, 120) : '';
       try {
-        if (m.action !== 'status' && m.action !== 'set') throw new Error('RustDesk 服务操作无效');
+        if (!['status', 'set', 'tray'].includes(m.action)) throw new Error('RustDesk 服务操作无效');
         const service = m.action === 'set'
           ? await rustdeskService.setEnabled(m.enabled, typeof m.clientPath === 'string' ? m.clientPath : '')
-          : await rustdeskService.status();
+          : m.action === 'tray' ? await rustdeskService.showTray() : await rustdeskService.status();
         send(ws, { type: 'rustdesk-service', requestId, ok: true, service });
         if (m.action === 'set') log('info', `RustDesk 后台服务已${m.enabled ? '开启' : '关闭'}`);
       } catch (error) {
