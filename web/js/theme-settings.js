@@ -157,7 +157,7 @@ function getTerminalOptions() {
     cursorBlink: s.cursorBlink,
     cursorStyle: 'bar',
     cursorWidth: 2,
-    cursorInactiveStyle: 'outline',
+    cursorInactiveStyle: 'bar',
     scrollback: s.scrollback,
     allowProposedApi: true,
     theme: { ...builtin.theme },
@@ -175,7 +175,7 @@ function applySettingsToTerminal(term, settings) {
     term.options.cursorBlink = s.cursorBlink;
     term.options.cursorStyle = 'bar';
     term.options.cursorWidth = 2;
-    term.options.cursorInactiveStyle = 'outline';
+    term.options.cursorInactiveStyle = 'bar';
     term.options.theme = { ...builtin.theme };
   } catch (e) { /* older xterm */ }
 }

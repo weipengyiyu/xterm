@@ -29,3 +29,11 @@ contextBridge.exposeInMainWorld('xtermDesktopFiles', {
 contextBridge.exposeInMainWorld('xtermRustDesk', {
   pickClient: () => ipcRenderer.invoke('xterm-rustdesk-pick'),
 });
+contextBridge.exposeInMainWorld('xtermDesktopFocus', {
+  onFocus(callback) {
+    if (typeof callback !== 'function') throw new TypeError('Expected a focus callback');
+    const listener = () => callback();
+    ipcRenderer.on('xterm-terminal-focus', listener);
+    return () => ipcRenderer.removeListener('xterm-terminal-focus', listener);
+  },
+});

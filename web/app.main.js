@@ -34,6 +34,11 @@ const WebLinksAddonCtor = (typeof WebLinksAddon === 'function') ? WebLinksAddon
   : (window.WebLinksAddon && (window.WebLinksAddon.WebLinksAddon || window.WebLinksAddon));
 function bindTerminalExtras(term) {
   if (!term) return;
+  // Keep one thin caret in both focus states. Shell prompts, pagers and editors
+  // may send DECSCUSR; do not let those sequences reintroduce a block cursor.
+  if (!term._cursorStyleHandler) {
+    term._cursorStyleHandler = term.parser.registerCsiHandler({ intermediates: ' ', final: 'q' }, () => true);
+  }
   if (WebLinksAddonCtor) {
     try { term.loadAddon(new WebLinksAddonCtor()); } catch (e) { /* 链接插件缺失时终端仍可用 */ }
   }

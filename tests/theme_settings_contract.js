@@ -46,7 +46,7 @@ assert.strictEqual(opts.fontSize, 13);
 assert.strictEqual(opts.scrollback, 5000);
 assert.strictEqual(opts.cursorStyle, 'bar');
 assert.strictEqual(opts.cursorWidth, 2);
-assert.strictEqual(opts.cursorInactiveStyle, 'outline');
+assert.strictEqual(opts.cursorInactiveStyle, 'bar');
 assert.strictEqual(opts.theme.background, '#1a1b26');
 sandbox.saveTerminalSettings({ themeId: 'one-dark', fontSize: 16, scrollback: 8000, cursorBlink: false, fontFamily: 'Cascadia Mono' });
 const next = sandbox.getTerminalOptions();

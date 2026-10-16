@@ -55,9 +55,16 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
       assert(actual.every(x => x.id === id), 'keys must go to the clicked pane');
     }
     const id = await page.evaluate(() => {
-      inputTab.term.options.cursorStyle = 'block';
       return inputTab.id;
     });
+    // An inactive terminal must use the same narrow caret, never an outline.
+    assert.deepStrictEqual(await page.evaluate(() => ({
+      active: inputTab.term.options.cursorStyle, inactive: inputTab.term.options.cursorInactiveStyle,
+    })), { active: 'bar', inactive: 'bar' });
+    for (let style = 0; style <= 6; style++) {
+      await page.evaluate(style => new Promise(resolve => inputTab.term.write(`\x1b[${style} q`, resolve)), style);
+      assert.strictEqual(await page.evaluate(() => inputTab.term.options.cursorStyle), 'bar', 'remote DECSCUSR must not change the caret to a rectangle');
+    }
     const primary = '.term-host.main-pane';
     const box = await page.$eval(primary, el => el.getBoundingClientRect().toJSON());
     await page.mouse.click(box.x + 30, box.y + box.height - 50);

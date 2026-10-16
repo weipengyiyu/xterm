@@ -177,6 +177,9 @@ function bindTerminalFocusRecovery() {
   document.addEventListener('pointercancel', () => { pointerDown = false; schedule(true); }, true);
   window.addEventListener('blur', () => { pointerDown = false; });
   window.addEventListener('focus', () => { recover(); schedule(); });
+  // BrowserWindow focus is distinct from DOM focus in Electron. The native
+  // window restores its webContents first, then notifies this guarded handler.
+  window.xtermDesktopFocus?.onFocus(() => { pointerDown = false; recover(); schedule(); });
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) schedule();
   });

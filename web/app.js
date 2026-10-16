@@ -165,7 +165,7 @@ function getTerminalOptions() {
     cursorBlink: s.cursorBlink,
     cursorStyle: 'bar',
     cursorWidth: 2,
-    cursorInactiveStyle: 'outline',
+    cursorInactiveStyle: 'bar',
     scrollback: s.scrollback,
     allowProposedApi: true,
     theme: { ...builtin.theme },
@@ -183,7 +183,7 @@ function applySettingsToTerminal(term, settings) {
     term.options.cursorBlink = s.cursorBlink;
     term.options.cursorStyle = 'bar';
     term.options.cursorWidth = 2;
-    term.options.cursorInactiveStyle = 'outline';
+    term.options.cursorInactiveStyle = 'bar';
     term.options.theme = { ...builtin.theme };
   } catch (e) { /* older xterm */ }
 }
@@ -1192,6 +1192,9 @@ function bindTerminalFocusRecovery() {
   document.addEventListener('pointercancel', () => { pointerDown = false; schedule(true); }, true);
   window.addEventListener('blur', () => { pointerDown = false; });
   window.addEventListener('focus', () => { recover(); schedule(); });
+  // BrowserWindow focus is distinct from DOM focus in Electron. The native
+  // window restores its webContents first, then notifies this guarded handler.
+  window.xtermDesktopFocus?.onFocus(() => { pointerDown = false; recover(); schedule(); });
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) schedule();
   });
@@ -4014,6 +4017,11 @@ const WebLinksAddonCtor = (typeof WebLinksAddon === 'function') ? WebLinksAddon
   : (window.WebLinksAddon && (window.WebLinksAddon.WebLinksAddon || window.WebLinksAddon));
 function bindTerminalExtras(term) {
   if (!term) return;
+  // Keep one thin caret in both focus states. Shell prompts, pagers and editors
+  // may send DECSCUSR; do not let those sequences reintroduce a block cursor.
+  if (!term._cursorStyleHandler) {
+    term._cursorStyleHandler = term.parser.registerCsiHandler({ intermediates: ' ', final: 'q' }, () => true);
+  }
   if (WebLinksAddonCtor) {
     try { term.loadAddon(new WebLinksAddonCtor()); } catch (e) { /* 链接插件缺失时终端仍可用 */ }
   }

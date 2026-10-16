@@ -9,6 +9,7 @@ const os = require('os');
 const protocol = require('./startup-protocol');
 const { installDownloadFiles } = require('./download-files');
 const { installRustDeskPicker } = require('./rustdesk-picker');
+const { installTerminalWindowFocus } = require('./terminal-focus');
 
 const root = path.resolve(__dirname, '..');
 const serverScript = path.join(root, 'server', 'index.js');
@@ -185,6 +186,7 @@ function createWindow() {
   });
   installDownloadFiles(win, { ipcMain, dialog }, () => engineOrigin);
   installRustDeskPicker(win, { ipcMain, dialog }, () => engineOrigin);
+  installTerminalWindowFocus(win);
   win.setMenuBarVisibility(false);
   win.on('page-title-updated', (event) => {
     event.preventDefault();
