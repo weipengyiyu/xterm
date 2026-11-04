@@ -77,6 +77,28 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     await assertInput('  \x7f\r', id);
     await page.evaluate(() => applySettingsToAllTerminals());
 
+    // Native Windows input can deliver Space keydown/up without a WM_CHAR
+    // (keypress). Focus is already correct; focus recovery cannot repair this.
+    const rawKeys = await page.createCDPSession();
+    async function rawSpace(modifiers = 0, repeat = false) {
+      await rawKeys.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: ' ', code: 'Space',
+        windowsVirtualKeyCode: 32, modifiers, autoRepeat: repeat });
+      await rawKeys.send('Input.dispatchKeyEvent', { type: 'keyUp', key: ' ', code: 'Space',
+        windowsVirtualKeyCode: 32, modifiers });
+    }
+    await rawSpace();
+    await assertInput(' ', id);
+    await rawSpace(0, true);
+    await rawSpace(8); // Shift+Space is still a literal space.
+    await assertInput('  ', id);
+    await rawSpace(2); // Ctrl+Space retains the shell's NUL mapping.
+    await rawSpace(1); // Alt+Space retains xterm's ESC prefix.
+    await assertInput('\x00\x1b ', id);
+    await page.evaluate(() => { inputTab.term.options.disableStdin = true; });
+    await rawSpace();
+    await assertInput('', id);
+    await page.evaluate(() => { inputTab.term.options.disableStdin = false; });
+
     // Unknown focus loss: no click/close/window event is available to repair it.
     // The first Space must reach the terminal once, without activating a button.
     await page.evaluate(() => $('btn-more').focus());
@@ -134,6 +156,13 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert(await page.evaluate(() => document.activeElement === inputTab.term.textarea), 'IME start must recover terminal focus');
     const ime = await page.createCDPSession();
     await ime.send('Input.imeSetComposition', { text: '中文', selectionStart: 2, selectionEnd: 2 });
+    await assertInput('', id);
+    await page.evaluate(() => {
+      // Space selects an IME candidate; it must not become shell whitespace.
+      inputTab.term.textarea.dispatchEvent(new KeyboardEvent('keydown', {
+        key: ' ', code: 'Space', keyCode: 32, isComposing: true, bubbles: true, cancelable: true,
+      }));
+    });
     await assertInput('', id);
     await ime.send('Input.insertText', { text: '中文' });
     await page.waitForFunction(() => sentInput.length > 0);
@@ -266,6 +295,8 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.mouse.click(splitBox.x + 30, splitBox.y + splitBox.height - 50);
     await page.keyboard.type(' split  spaces ');
     await assertInput(' split  spaces ', paneId);
+    await rawSpace();
+    await assertInput(' ', paneId);
     await page.evaluate(() => $('btn-more').focus());
     await page.keyboard.press('Space');
     await assertInput(' ', paneId);
@@ -352,7 +383,8 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.keyboard.type(' main ');
     await assertInput(' main ', id);
     assert.deepStrictEqual(errors, []);
-    console.log('✓ Terminal input: idle/hover recovery, first key/repeat/IME/paste, toolbar/dialogs, fields, selection, window return and splits passed');
+    await rawKeys.detach();
+    console.log('✓ Terminal input: raw Space/repeat/modifiers/IME, idle/hover recovery, first key/paste, toolbar/dialogs, fields, selection, window return and splits passed');
   } finally {
     if (browser) await browser.close();
     server.kill();

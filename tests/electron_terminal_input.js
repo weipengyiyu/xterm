@@ -61,6 +61,30 @@ async function runElectron() {
     assert.strictEqual(await js("inputWire.join('').replace(/\\x1b\\[[IO]/g, '')"), ' ',
       'first Space must cross the real Electron input pipeline exactly once (excluding negotiated focus reports)');
     assert(await js("$('menu-more').classList.contains('hidden')"), 'Space must not activate the toolbar');
+    await js('inputWire.length = 0;');
+    // Omit text/WM_CHAR deliberately: xterm's default keypress-only Space
+    // path loses this key although DOM and native focus are both correct.
+    await press(' ', 'Space', 32);
+    assert.strictEqual(await js("inputWire.join('').replace(/\\x1b\\[[IO]/g, '')"), ' ',
+      'focused Space must reach the PTY even when Chromium emits no character event');
+    await js("$('btn-more').focus(); inputWire.length = 0;");
+    await press(' ', 'Space', 32);
+    assert.strictEqual(await js("inputWire.join('').replace(/\\x1b\\[[IO]/g, '')"), ' ',
+      'focus recovery must also preserve Space without a character event');
+    await js('inputWire.length = 0;');
+    await cdp('Input.imeSetComposition', { text: '中文', selectionStart: 2, selectionEnd: 2 });
+    assert.strictEqual(await js("inputWire.join('').replace(/\\x1b\\[[IO]/g, '')"), '');
+    await js(`nativeInputTab.term.textarea.dispatchEvent(new KeyboardEvent('keydown', {
+      key: ' ', code: 'Space', keyCode: 32, isComposing: true, bubbles: true, cancelable: true
+    })); void 0;`);
+    assert.strictEqual(await js("inputWire.join('').replace(/\\x1b\\[[IO]/g, '')"), '',
+      'IME candidate Space must not send whitespace or commit composition early');
+    await cdp('Input.imeSetComposition', { text: '', selectionStart: 0, selectionEnd: 0 });
+    await sleep(50);
+    await js('inputWire.length = 0;');
+    await press(' ', 'Space', 32, ' ');
+    assert.strictEqual(await js("inputWire.join('').replace(/\\x1b\\[[IO]/g, '')"), ' ',
+      'Space must resume exactly once after composition is canceled');
     const command = process.platform === 'win32' ? 'echo XTERM_FOCUS  SPACE_OK' : "printf 'XTERM_FOCUS  SPACE_OK\\n'";
     await cdp('Input.insertText', { text: command });
     await press('Enter', 'Enter', 13, '\r');
@@ -113,7 +137,7 @@ async function runElectron() {
     contents.sendInputEvent({ type: 'keyUp', keyCode: 'R', modifiers: ['control', 'shift'] });
     await loaded;
     assert.strictEqual(await js('typeof window.oldDocumentMarker'), 'undefined');
-    console.log('✓ Electron input: real PTY spaces, preload focus IPC, active/inactive caret pixels, remote cursor policy and native reload passed');
+    console.log('✓ Electron input: real PTY spaces with/without character events, IME cancellation, preload focus IPC, caret pixels, remote cursor policy and native reload passed');
   } finally {
     win.destroy();
     app.quit();

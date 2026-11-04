@@ -262,6 +262,21 @@ function bindClipboard(tab) {
     if (e.type !== 'keydown') return true;
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key.toLowerCase();
+    // xterm 6 sends a plain Space on keypress only. Windows/IME transitions
+    // can omit that character event even while letters and Enter still work.
+    // Send it through the public input API at keydown and cancel the browser
+    // default, so a normal keypress/input sequence cannot send a second space.
+    if (e.key === ' ' && !mod && !e.altKey) {
+      // Candidate selection belongs to the IME. Returning false without
+      // preventDefault leaves native composition intact, including Space
+      // events whose keyCode is 32 instead of the usual IME code 229.
+      if (e.isComposing || term.element?.querySelector('.composition-view.active')) return false;
+      if (e.keyCode !== 229) {
+        e.preventDefault();
+        term.input(' ', true);
+        return false;
+      }
+    }
     if (mod && !e.shiftKey && k === 'r') {
       const session = owningSessionTab(tab);
       if (session && handleReconnectHotkey(session)) {
