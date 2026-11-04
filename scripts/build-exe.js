@@ -1,97 +1,41 @@
-// 构建独立 EXE: caxa 将 Node.js + 项目打包为单个可执行文件
-// 用法: node scripts/build-exe.js
-// 前置: 已装全局 caxa (npm install -g caxa) 或本机有 npx caxa
-//
-// 产物: dist/xterm.exe
-//   - 双击即启动后台服务并自动打开浏览器 http://127.0.0.1:8787
-//   - 无需对方安装 Node.js
-//   - 已用 staging 只打包运行时 (server / web / node_modules)，体积约 50MB
-const { execSync } = require('child_process');
-const { existsSync, mkdirSync, copyFileSync, cpSync, rmSync } = require('fs');
-const os = require('os');
+'use strict';
+
+const fs = require('fs');
 const path = require('path');
-const { copyBundledRustDesk } = require('./bundled-rustdesk');
+const { check } = require('./dependencies');
+const { stageRuntime } = require('./package-runtime');
 
-const ROOT = path.join(__dirname, '..');
-const OUT = path.join(ROOT, 'dist');
-const TARGET = path.join(OUT, 'xterm.exe');
+const root = path.resolve(__dirname, '..');
+const out = path.join(root, 'dist');
+const target = path.join(out, 'xterm.exe');
 
-console.log('┌─ xterm EXE 构建 ───────────────────┐');
-
-// 1. 检查 caxa (优先使用项目 devDependency)
-try {
-  execSync('npx caxa --version', { stdio: 'pipe', cwd: ROOT });
-  console.log('│ caxa: ✓');
-} catch {
-  console.log('│ caxa: 安装中…');
-  execSync('npm install --no-save caxa@3.0.0', { stdio: 'inherit', cwd: ROOT });
-}
-
-// 2. 确保 dist/
-mkdirSync(OUT, { recursive: true });
-
-// 3. 构建采用 staging 目录: 只复制运行时文件再打包, 不依赖 caxa 的
-//    --exclude 语义 (实测对目录不生效, 曾把产物撑到 1GB)。
-const STAGING = path.join(os.tmpdir(), `xterm-caxa-${process.pid}`);
-const COPY_DIRS = ['server', 'web', 'node_modules'];
-const COPY_FILES = ['package.json', 'package-lock.json', 'LICENSE'];
-
-function prepareStaging() {
-  mkdirSync(STAGING, { recursive: true });
-  for (const dir of COPY_DIRS) {
-    cpSync(path.join(ROOT, dir), path.join(STAGING, dir), { recursive: true });
+async function main() {
+  if (process.platform !== 'win32' || process.arch !== 'x64') {
+    throw new Error('Build xterm.exe with Windows x64 Node.js.');
   }
-  for (const file of COPY_FILES) {
-    copyFileSync(path.join(ROOT, file), path.join(STAGING, file));
-  }
-  copyBundledRustDesk(STAGING);
-  // Remove build-only packages from the copied dependency tree without
-  // contacting the registry. caxa's own `npm dedupe --production` may access
-  // the network and can hang silently in offline/restricted environments.
-  execSync('npm prune --omit=dev --ignore-scripts --offline', {
-    stdio: 'pipe',
-    cwd: STAGING,
-  });
-  console.log(`│ staging: ${STAGING}`);
-}
-
-// 5. 验证运行时资源 (串口释放脚本必须包含在产物中)
-function assertRuntimeResources() {
-  const required = [
-    path.join(ROOT, 'server', 'free-serial.ps1'),
-    path.join(ROOT, 'server', 'index.js'),
-    path.join(STAGING, 'node_modules', 'serialport', 'package.json'),
-  ];
-  for (const file of required) {
-    if (!existsSync(file)) throw new Error(`缺少运行时资源: ${file}`);
+  const failure = check(root, true);
+  if (failure) throw new Error('Cannot package an incomplete runtime: ' + failure);
+  const { default: caxa } = await import('caxa');
+  fs.mkdirSync(out, { recursive: true });
+  const staging = fs.mkdtempSync(path.join(out, '.xterm-exe-'));
+  try {
+    const runtime = path.join(staging, 'runtime-files');
+    fs.mkdirSync(runtime);
+    stageRuntime(runtime);
+    const executable = path.join(staging, 'xterm.exe');
+    await caxa({
+      input: runtime,
+      output: executable,
+      dedupe: false,
+      includeNode: false,
+      uncompressionMessage: 'Preparing xterm for first launch',
+      command: ['{{caxa}}/runtime/node.exe', '{{caxa}}/scripts/launch-exe.js'],
+    });
+    fs.renameSync(executable, target);
+    console.log('Built ' + target);
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 }
 
-// 4. 构建 (不传 --no-open, 双击自动开浏览器; 对方如需静默可加 --no-open)
-console.log(`│ 输出: ${TARGET}`);
-console.log('│ 打包中 (可能需要几分钟)…');
-try {
-  prepareStaging();
-  assertRuntimeResources();
-  execSync(
-    `npx caxa --input "${STAGING}"` +
-    ` --output "${TARGET}"` +
-    ` --no-dedupe` +
-    ` -- "{{caxa}}/node_modules/.bin/node" "{{caxa}}/server/index.js"`,
-    { stdio: 'inherit', cwd: ROOT }
-  );
-  console.log('│ ✅ 构建成功');
-  console.log(`│ ${TARGET}`);
-  console.log('│ 双击 xterm.exe 启动 (后台服务 + 自动打开浏览器 http://127.0.0.1:8787)');
-} catch (e) {
-  console.log('│ ❌ caxa 构建失败');
-  const detail = [e.stderr, e.stdout, e.message].filter(Boolean).join('\n').trim();
-  if (detail) console.log(detail.split('\n').map(l => `│ ${l}`).join('\n'));
-  console.log('│ 备选方案: ');
-  console.log('│   1. 确保已安装 Node.js 和 npx caxa');
-  console.log('│   2. 双击 run.bat 即可启动 (无需 EXE)');
-  process.exitCode = 1;
-} finally {
-  try { rmSync(STAGING, { recursive: true, force: true }); } catch {}
-}
-console.log('└──────────────────────────────────────┘');
+main().catch(error => { console.error(error.stack || error.message); process.exitCode = 1; });

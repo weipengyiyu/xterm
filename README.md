@@ -7,6 +7,19 @@
 
 ## 快速开始
 
+### Windows x64 单文件版
+
+双击 `xterm.exe` 即可打开 xterm 桌面窗口。只需复制这一个文件到目标电脑，无需安装、预装 Node.js 或联网下载运行组件。首次运行会自动把内置组件解包到当前用户的临时目录。会话和设置仍保存在 `%USERPROFILE%\.xterm`。
+
+在已安装项目依赖的 Windows x64 构建机上生成并验证成品：
+
+```powershell
+npm run build:exe
+npm run test:package
+```
+
+产物位于 `dist/xterm.exe`。对外分发请遵循 [签名发布流程](docs/RELEASE.md)。
+
 ### RustDesk 远程桌面
 
 点击「新建」，类型选择 **RustDesk**，填写会话名称和设备 ID（也可填写支持直连的 IP 地址），然后「保存并连接」。以后双击左侧会话即可打开独立的 RustDesk 窗口；密码、远程控制和文件传输在 RustDesk 中操作。xterm 显示的「已启动」表示已打开客户端，实际连接结果以 RustDesk 窗口为准。
@@ -238,7 +251,6 @@ stop.vbs              安全识别并停止后台 xterm 服务
 - 目录 ZIP 会跳过符号链接以及扫描后消失/无法读取的文件，并在进度与完成状态中显示跳过数量；
 - 使用 `launcher.vbs` 时，关闭浏览器不会停止后台服务，再次启动会使用仍在后台内存中的凭据恢复会话；如需彻底停止，可在工具栏选择“全部关闭”后双击 `stop.vbs`；
 - 使用 `run.bat --fg`、`sh ./run.sh --fg` 或 `npm start` 时，关闭前台终端会停止服务；
-- 独立 EXE：本地可用 `npm run build:exe`（caxa）打出 `dist/xterm.exe`；**对外分发**须走 GitHub Actions 签名发布（见 `docs/RELEASE.md`），不要手传未签名包。
 
 ### 串口回环验证(可选)
 

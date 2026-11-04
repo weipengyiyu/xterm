@@ -1,5 +1,5 @@
-// Validates a locally built caxa artifact as a whole product, not just its
-// static page: launcher identity, origin/token gate, SFTP HTTP routing,
+// Validates a relocated single EXE: desktop startup, launcher identity,
+// origin/token gate, SFTP HTTP routing,
 // DPAPI-backed credential persistence across a restart, native serialport
 // enumeration and the VNC bridge upgrade path.  Everything runs against an
 // isolated USERPROFILE so the developer's real sessions are never touched.
@@ -9,7 +9,7 @@ const fs = require('fs');
 const http = require('http');
 const os = require('os');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const { WebSocket } = require('ws');
 
 const ROOT = path.join(__dirname, '..');
@@ -18,7 +18,8 @@ const PORT = Number(process.env.XTERM_SMOKE_PORT || 8903);
 const BASE = `http://127.0.0.1:${PORT}`;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
-if (!fs.existsSync(EXE)) throw new Error('dist/xterm.exe 不存在；请先运行 node scripts/build-exe.js');
+const sourceMode = process.env.XTERM_SMOKE_SOURCE === '1';
+if (!sourceMode && !fs.existsSync(EXE)) throw new Error('dist/xterm.exe 不存在；请先运行 npm run build:exe');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -30,12 +31,16 @@ function httpGet(urlPath, headers = {}) {
       res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => resolve({ status: res.statusCode, body }));
     });
+    req.setTimeout(2000, () => req.destroy(new Error('HTTP request timed out')));
     req.on('error', reject);
   });
 }
 
-async function waitForApp(deadline = Date.now() + 30000) {
+async function waitForApp(processRun, deadline = Date.now() + 30000) {
   while (Date.now() < deadline) {
+    if (processRun.child.exitCode !== null || processRun.child.signalCode !== null) {
+      throw new Error(`Packaged engine exited during startup: ${processRun.output}`);
+    }
     try {
       const res = await httpGet('/launcher-info');
       if (res.status === 200) return JSON.parse(res.body);
@@ -90,58 +95,110 @@ function expectWsClose(pathname, token, timeout = 15000) {
   });
 }
 
-async function startApp(profile) {
-  // XTERM_SMOKE_SOURCE=1 runs the same flow against `node server/index.js`
-  // instead of the packaged EXE.  That debugs the assertions without a rebuild,
-  // but it does NOT validate packaging (bundled node_modules / native modules),
-  // so it must never replace the EXE run before a release.
-  const sourceMode = process.env.XTERM_SMOKE_SOURCE === '1';
-  const cmd = sourceMode ? process.execPath : EXE;
-  const args = sourceMode
-    ? ['server/index.js', '--port', String(PORT), '--no-open']
-    : ['--port', String(PORT), '--no-open'];
-  if (sourceMode) console.log('   (source mode: packaged artifact NOT validated)');
-  const child = spawn(cmd, args, {
-    cwd: ROOT,
-    env: { ...process.env, USERPROFILE: profile, HOME: profile },
-    stdio: 'ignore',
+function launch(executable, args, cwd, env) {
+  const child = spawn(executable, args, { cwd, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  const run = { child, output: '' };
+  child.stdout.on('data', chunk => { run.output += chunk; });
+  child.stderr.on('data', chunk => { run.output += chunk; });
+  run.done = new Promise(resolve => {
+    child.once('error', error => {
+      run.output += error.message;
+      resolve(null);
+    });
+    child.once('close', resolve);
   });
-  const info = await waitForApp();
-  assert.strictEqual(info.app, 'xterm', 'packaged launcher-info must identify xterm');
-  assert.ok(Number.isInteger(info.pid), 'launcher-info must expose the real PID');
-  const token = await readToken();
-  const ws = await openWs('/', token);
-  return { child, ws, token, info };
+  return run;
+}
+
+async function verifyDesktop(executable, cwd, env, proof) {
+  const run = launch(executable, ['--port', String(PORT)], cwd, { ...env, XTERM_PROOF: proof });
+  const timer = setTimeout(() => killTree(run.child), 90000);
+  try {
+    assert.strictEqual(await run.done, 0, run.output);
+    assert.match(fs.readFileSync(proof, 'utf8'), /已连接|Server connected/);
+    record('single EXE desktop connects from relocated folder with no Node on PATH');
+  } finally {
+    clearTimeout(timer);
+  }
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    try { await httpGet('/launcher-info'); } catch (error) {
+      if (error.code === 'ECONNREFUSED') return;
+      throw error;
+    }
+    await sleep(100);
+  }
+  throw new Error('Desktop exit did not shut down its engine');
+}
+
+async function startApp(executable, cwd, env) {
+  const args = sourceMode ? ['server/index.js'] : [];
+  const run = launch(executable, [...args, '--port', String(PORT), '--no-open'], cwd, env);
+  try {
+    const info = await waitForApp(run);
+    assert.strictEqual(info.app, 'xterm', 'packaged launcher-info must identify xterm');
+    assert.ok(Number.isInteger(info.pid), 'launcher-info must expose the real PID');
+    const token = await readToken();
+    const ws = await openWs('/', token);
+    return { ...run, ws, token };
+  } catch (error) {
+    await stopApp(run);
+    throw error;
+  }
+}
+
+function killTree(child) {
+  if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
+  if (process.platform === 'win32') {
+    spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+  } else {
+    child.kill();
+  }
 }
 
 async function stopApp(app) {
   if (!app) return;
-  try { app.ws.close(); } catch { /* already gone */ }
-  // The caxa launcher spawns an inner node process; killing only the parent
-  // leaves it alive holding the port.  Kill the whole process tree instead.
-  if (app.child.exitCode === null) {
-    if (process.platform === 'win32') {
-      try {
-        require('child_process').execSync(`taskkill /PID ${app.child.pid} /T /F`, { stdio: 'ignore' });
-      } catch { /* already exited */ }
-    } else {
-      app.child.kill();
-    }
-  }
-  if (app.child.exitCode === null) await new Promise((resolve) => app.child.once('exit', resolve));
-  // Give the port a moment to be released before the restart phase reuses it.
-  await sleep(300);
+  app.ws?.terminate();
+  killTree(app.child);
+  await app.done;
 }
 const checks = [];
 function record(name) { checks.push(name); console.log(`   ✓ ${name}`); }
 
 (async () => {
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-exe-smoke-'));
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'xterm-exe-smoke-'));
+  const profile = path.join(sandbox, 'profile');
+  const moved = path.join(sandbox, '独立目录 & offline');
+  const cache = path.join(sandbox, 'temp');
+  const executable = sourceMode ? process.execPath : path.join(moved, 'xterm.exe');
+  const cwd = sourceMode ? ROOT : moved;
+  const env = { ...process.env, USERPROFILE: profile, HOME: profile };
   let app = null;
   const sessionId = { value: '' };
 
   try {
-    app = await startApp(profile);
+    fs.mkdirSync(profile);
+    if (sourceMode) {
+      console.log('   (source mode: packaged artifact NOT validated)');
+    } else {
+      fs.mkdirSync(moved);
+      fs.mkdirSync(cache);
+      fs.copyFileSync(EXE, executable);
+      for (const key of Object.keys(env)) {
+        if (/^(path|node_path|node_options|xterm_node|xterm_proof|xterm_startup_request|xterm_rustdesk|electron_run_as_node|electron_override_dist_path)$/i.test(key)) delete env[key];
+      }
+      const system32 = path.join(process.env.SystemRoot, 'System32');
+      Object.assign(env, {
+        PATH: [system32, path.join(system32, 'WindowsPowerShell', 'v1.0')].join(path.delimiter),
+        TEMP: cache, TMP: cache,
+        HTTP_PROXY: 'http://127.0.0.1:1', HTTPS_PROXY: 'http://127.0.0.1:1',
+        ALL_PROXY: 'http://127.0.0.1:1', NO_PROXY: '127.0.0.1,localhost',
+        npm_config_offline: 'true',
+      });
+      await verifyDesktop(executable, cwd, env, path.join(sandbox, 'connected.txt'));
+      assert.deepStrictEqual(fs.readdirSync(moved), ['xterm.exe']);
+    }
+    app = await startApp(executable, cwd, env);
     record('launcher identity + bootstrap token (isolated profile)');
 
     // ---------- static assets ----------
@@ -178,6 +235,15 @@ function record(name) { checks.push(name); console.log(`   ✓ ${name}`); }
     assert(Array.isArray(ports), 'serialport enumeration must return a list');
     record(`native serialport binding works (${ports.length} port(s) detected)`);
 
+    if (!sourceMode) {
+      response = nextMessage(app.ws, (m) => m.type === 'rustdesk-info', 15000, 'bundled RustDesk detection');
+      app.ws.send(JSON.stringify({ type: 'rustdesk-info' }));
+      const { clientPath } = await response;
+      assert(path.relative(cache, clientPath).startsWith('caxa' + path.sep), 'RustDesk must resolve from the extracted EXE');
+      assert(clientPath.endsWith(path.join('tools', 'rustdesk', 'rustdesk.exe')));
+      record('bundled RustDesk resolves inside the extracted runtime');
+    }
+
     // ---------- VNC bridge policy ----------
     // A public target must be refused by the bridge's private-target policy,
     // which proves the VNC module and its validation ran inside the package.
@@ -209,7 +275,7 @@ function record(name) { checks.push(name); console.log(`   ✓ ${name}`); }
 
     // ---------- DPAPI read after restart ----------
     await stopApp(app);
-    app = await startApp(profile);
+    app = await startApp(executable, cwd, env);
     response = nextMessage(app.ws, (m) => m.type === 'vnc-credential' && m.requestId === 'exe-smoke-restore',
       20000, 'vnc credential');
     app.ws.send(JSON.stringify({
@@ -223,7 +289,9 @@ function record(name) { checks.push(name); console.log(`   ✓ ${name}`); }
     console.log(`\n✅ packaged EXE full smoke test passed (${checks.length} checks)`);
   } finally {
     await stopApp(app);
-    fs.rmSync(profile, { recursive: true, force: true });
+    assert.strictEqual(path.dirname(sandbox), os.tmpdir());
+    assert(path.basename(sandbox).startsWith('xterm-exe-smoke-'));
+    fs.rmSync(sandbox, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
   }
 })().catch((error) => { console.error('❌', error.stack || error.message); process.exit(1); });
 
