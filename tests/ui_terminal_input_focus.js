@@ -183,6 +183,31 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.keyboard.type(' commands ');
     await assertInput(' commands ', id);
     await page.click('#btn-new');
+    assert(await page.evaluate(() => document.activeElement === $('f-name')));
+    await page.keyboard.type('Lab SSH');
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('Lab group');
+    assert.strictEqual(await page.$eval('#f-group', el => el.value), 'Lab group');
+    for (const [selector, value] of [
+      ['#f-host', 'localhost'], ['#f-port', '2222'], ['#f-user', 'test-user'],
+      ['#f-password', 'Test password!'], ['#f-autocmds', 'echo test'],
+    ]) {
+      await page.click(selector);
+      await page.keyboard.down('Control');
+      await page.keyboard.press('a');
+      await page.keyboard.up('Control');
+      // Background focus requests must not take input from the active field.
+      await page.evaluate(() => inputTab.term.focus());
+      await page.keyboard.type(value);
+      await assertInput('', id);
+      assert.strictEqual(await page.$eval(selector, el => el.value), value);
+    }
+    await page.keyboard.down('Control');
+    await page.keyboard.press('n');
+    await page.keyboard.press('i');
+    await page.keyboard.up('Control');
+    assert.strictEqual(await page.$eval('#f-name', el => el.value), 'Lab SSH');
+    assert.strictEqual(await page.$('#xterm-display-prompt'), null);
     await page.click('#btn-dlg-cancel');
     await page.keyboard.type(' cancel ');
     await assertInput(' cancel ', id);
@@ -357,13 +382,12 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.strictEqual(await page.$eval('#session-filter', el => el.value), ' field ');
     await otherPage.close();
     await page.evaluate(() => {
-      $('dlg-mask').classList.remove('hidden');
-      $('f-name').focus();
+      openDlg();
       focusActiveTerminal();
     });
     assert(await page.evaluate(() => document.activeElement === $('f-name')), 'dialog fields must keep their input focus');
     // Programmatic/asynchronous dialog close must work without an explicit focus call.
-    await page.evaluate(() => $('dlg-mask').classList.add('hidden'));
+    await page.evaluate(() => closeDlg());
     const focus = await page.evaluate(() => ({
       actual: document.activeElement === inputTab.extraPanes[0].term.textarea,
       cursor: inputTab.term.options.cursorStyle, splitCursor: inputTab.extraPanes[0].term.options.cursorStyle,

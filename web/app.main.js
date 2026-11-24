@@ -231,6 +231,7 @@ function showDisplayPrompt() {
 }
 
 document.addEventListener('keydown', (e) => {
+  if (!$('dlg-mask').classList.contains('hidden')) return;
   if ((e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I')) {
     const tab = tabs.find(t => t.id === activeTabId);
     if (tab && tab.cfg.type === 'ssh' && tab.imageAddon) {
@@ -810,7 +811,7 @@ function handleMsg(m) {
           $('f-key').value = cfg.key;
           $('f-jump').value = cfg.proxyJump || '';
           $('f-name').value = n;
-          $('dlg-mask').classList.add('hidden');
+          closeDlg();
           $('sshcfg-dialog-mask').classList.add('hidden');
           $('f-type').focus();
         };
@@ -1799,7 +1800,14 @@ function openDlg(existing = null) {
   $('l-reconnect').checked = !!existing?.reconnect;
   updateDlgFields();
   $('dlg-mask').classList.remove('hidden');
+  // A visual overlay alone does not block programmatic focus or Tab navigation.
+  $('app').inert = true;
   $('f-name').focus();
+}
+
+function closeDlg() {
+  $('dlg-mask').classList.add('hidden');
+  $('app').inert = false;
 }
 
 function updateDlgFields() {
@@ -2804,7 +2812,7 @@ $('f-proxy-type').onchange = updateDlgFields;
 $('f-jump').oninput = updateDlgFields;
 $('f-jump-auth').onchange = updateDlgFields;
 $('t-autologin').onchange = updateDlgFields;
-$('btn-dlg-cancel').onclick = () => $('dlg-mask').classList.add('hidden');
+$('btn-dlg-cancel').onclick = closeDlg;
 
 // 关闭确认
 $('btn-close-ok').onclick = () => {
@@ -2866,7 +2874,7 @@ function doConnect(save) {
       return;
     }
   }
-  $('dlg-mask').classList.add('hidden');
+  closeDlg();
   if (save) {
     const requestId = `${Date.now()}-${++saveRequestSeq}`;
     pendingSavedConnections.set(requestId, cfg);
@@ -2908,6 +2916,7 @@ if ($('session-filter')) {
 
 // ---------- 全局快捷键 (可配置映射 → web/js/hotkeys.js) ----------
 document.addEventListener('keydown', (e) => {
+  if (!$('dlg-mask').classList.contains('hidden')) return;
   const map = typeof loadHotkeys === 'function' ? loadHotkeys() : null;
   const action = map && typeof getHotkeyAction === 'function' ? getHotkeyAction(e, map) : null;
   const typing = typeof isTypingTarget === 'function' ? isTypingTarget(e.target) : false;

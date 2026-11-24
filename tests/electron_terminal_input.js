@@ -91,6 +91,22 @@ async function runElectron() {
     await until(() => js(`Array.from({length:nativeInputTab.term.buffer.active.length}, (_, i) =>
       nativeInputTab.term.buffer.active.getLine(i)?.translateToString(true).trim()).includes('XTERM_FOCUS  SPACE_OK')`),
     'The real shell did not echo the command with both spaces intact');
+    await js("$('btn-new').click(); inputWire.length = 0;");
+    await cdp('Input.imeSetComposition', { text: '测试会话', selectionStart: 4, selectionEnd: 4 });
+    await cdp('Input.insertText', { text: '测试会话' });
+    assert.strictEqual(await js("$('f-name').value"), '测试会话');
+    await js("$('f-user').focus(); nativeInputTab.term.focus();");
+    contents.send('xterm-terminal-focus');
+    await sleep(300);
+    await press('u', 'KeyU', 85, 'u');
+    await press('s', 'KeyS', 83, 's');
+    await press('e', 'KeyE', 69, 'e');
+    await press('r', 'KeyR', 82, 'r');
+    assert.strictEqual(await js("$('f-user').value"), 'user');
+    assert.strictEqual(await js("inputWire.join('').replace(/\\x1b\\[[IO]/g, '')"), '',
+      'new connection fields must not send input to the active PTY');
+    await js("$('btn-dlg-cancel').click();");
+    await until(() => js('document.activeElement === nativeInputTab.term.textarea'), 'Closing the form did not restore terminal focus');
     // Every DECSCUSR style must leave the selected thin-caret policy intact.
     await js('nativeInputTab.term.options.cursorBlink = false; nativeInputTab.term.focus();');
     for (let style = 0; style <= 6; style++) {
